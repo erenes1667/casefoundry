@@ -1,0 +1,138 @@
+[
+  {
+    "id": "samsung-galaxy-s24-plus-sm-s926",
+    "brand": "Samsung",
+    "model": "Galaxy S24+",
+    "variant": "SM-S926 family",
+    "modelNumbers": ["SM-S926B", "SM-S926U", "SM-S926U1", "SM-S926N", "SM-S9260"],
+    "chassisFamily": "galaxy-s24-plus",
+    "releaseYear": 2024,
+    "revision": 3,
+    "status": "reference-derived",
+    "confidence": 84,
+    "dimensions": {
+      "width": 75.9,
+      "length": 158.5,
+      "depth": 7.7,
+      "cornerRadius": 9.2
+    },
+    "features": [
+      {"id":"s24p-lens-1","name":"Wide camera","kind":"camera","side":"back","shape":"circle","center":{"x":26.8,"y":63.5,"z":8.6},"size":{"x":13.8,"y":13.8,"z":2.1},"confidence":82},
+      {"id":"s24p-lens-2","name":"Telephoto camera","kind":"camera","side":"back","shape":"circle","center":{"x":26.8,"y":46.3,"z":8.6},"size":{"x":13.8,"y":13.8,"z":2.1},"confidence":82},
+      {"id":"s24p-lens-3","name":"Ultra-wide camera","kind":"camera","side":"back","shape":"circle","center":{"x":26.8,"y":29.1,"z":8.6},"size":{"x":13.8,"y":13.8,"z":2.1},"confidence":82},
+      {"id":"s24p-flash","name":"LED flash","kind":"flash","side":"back","shape":"circle","center":{"x":14.0,"y":46.3,"z":7.9},"size":{"x":5.2,"y":5.2,"z":0.5},"confidence":78},
+      {"id":"s24p-volume","name":"Volume rocker","kind":"button","side":"screenRight","shape":"slot","center":{"x":37.95,"y":31.0,"z":5.0},"size":{"x":1.2,"y":22.0,"z":3.0},"confidence":88},
+      {"id":"s24p-power","name":"Side key","kind":"button","side":"screenRight","shape":"slot","center":{"x":37.95,"y":5.0,"z":5.0},"size":{"x":1.2,"y":13.0,"z":3.0},"confidence":88},
+      {"id":"s24p-usb","name":"USB-C","kind":"port","side":"bottom","shape":"slot","center":{"x":0.0,"y":-79.25,"z":3.3},"size":{"x":12.2,"y":2.0,"z":4.4},"confidence":80},
+      {"id":"s24p-speaker","name":"Bottom speaker","kind":"speaker","side":"bottom","shape":"slot","center":{"x":-20.0,"y":-79.25,"z":3.2},"size":{"x":14.0,"y":2.0,"z":3.2},"confidence":75},
+      {"id":"s24p-mic-bottom","name":"Bottom microphone","kind":"microphone","side":"bottom","shape":"circle","center":{"x":13.0,"y":-79.25,"z":3.2},"size":{"x":2.2,"y":2.2,"z":2.2},"confidence":74},
+      {"id":"s24p-mic-top","name":"Top microphone array","kind":"microphone","side":"top","shape":"slot","center":{"x":12.5,"y":79.25,"z":3.2},"size":{"x":12.0,"y":2.0,"z":2.2},"confidence":74}
+    ],
+    "sources": [
+      {"id":"s24p-source-samsung","title":"Samsung Galaxy S24+ specifications","kind":"manufacturer","url":"https://www.samsung.com/galaxy-s24-ultra/specs/","grade":"A"},
+      {"id":"s24p-source-case","title":"Supplied S24+ reference case mesh","kind":"reference-mesh","grade":"B"}
+    ],
+    "validation": {
+      "geometry": "passed",
+      "slice": "passed",
+      "physicalFit": "not-tested",
+      "lastChecked": "2026-08-08"
+    },
+    "tags": ["regression", "open-lip", "three-camera"],
+    "notes": "Body dimensions are manufacturer-sourced. Hardware placements are derived from the supplied reference case and remain pending physical handset validation.",
+    "createdAt": "2026-08-08T00:00:00.000Z",
+    "updatedAt": "2026-08-08T00:00:00.000Z"
+  },
+  {
+    "id": "samsung-galaxy-s23-fe-sm-s711",
+    "brand": "Samsung",
+    "model": "Galaxy S23 FE",
+    "variant": "SM-S711 family",
+    "modelNumbers": ["SM-S711B", "SM-S711U", "SM-S711U1", "SM-S711N", "SM-S7110"],
+    "chassisFamily": "galaxy-s23-fe",
+    "releaseYear": 2023,
+    "revision": 4,
+    "status": "reference-derived",
+    "confidence": 80,
+    "dimensions": {"width":76.5,"length":158.0,"depth":8.2,"cornerRadius":9.0},
+    "features": [
+      {"id":"s23fe-lens-1","name":"Wide camera","kind":"camera","side":"back","shape":"circle","center":{"x":27.0,"y":62.0,"z":9.1},"size":{"x":14.2,"y":14.2,"z":2.0},"confidence":80},
+      {"id":"s23fe-lens-2","name":"Telephoto camera","kind":"camera","side":"back","shape":"circle","center":{"x":27.0,"y":45.0,"z":9.1},"size":{"x":14.2,"y":14.2,"z":2.0},"confidence":80},
+      {"id":"s23fe-lens-3","name":"Ultra-wide camera","kind":"camera","side":"back","shape":"circle","center":{"x":27.0,"y":28.0,"z":9.1},"size":{"x":14.2,"y":14.2,"z":2.0},"confidence":80},
+      {"id":"s23fe-flash","name":"LED flash","kind":"flash","side":"back","shape":"circle","center":{"x":14.2,"y":45.0,"z":8.4},"size":{"x":5.2,"y":5.2,"z":0.5},"confidence":76},
+      {"id":"s23fe-volume","name":"Volume rocker","kind":"button","side":"screenRight","shape":"slot","center":{"x":38.25,"y":30.0,"z":5.2},"size":{"x":1.3,"y":21.5,"z":3.2},"confidence":85},
+      {"id":"s23fe-power","name":"Side key","kind":"button","side":"screenRight","shape":"slot","center":{"x":38.25,"y":4.5,"z":5.2},"size":{"x":1.3,"y":13.5,"z":3.2},"confidence":85},
+      {"id":"s23fe-usb","name":"USB-C","kind":"port","side":"bottom","shape":"slot","center":{"x":0.0,"y":-79.0,"z":3.5},"size":{"x":12.3,"y":2.0,"z":4.5},"confidence":78},
+      {"id":"s23fe-speaker","name":"Bottom speaker","kind":"speaker","side":"bottom","shape":"slot","center":{"x":-20.5,"y":-79.0,"z":3.4},"size":{"x":14.5,"y":2.0,"z":3.0},"confidence":72},
+      {"id":"s23fe-mic","name":"Bottom microphone","kind":"microphone","side":"bottom","shape":"circle","center":{"x":13.0,"y":-79.0,"z":3.4},"size":{"x":2.2,"y":2.2,"z":2.2},"confidence":72}
+    ],
+    "sources": [
+      {"id":"s23fe-source-samsung","title":"Samsung Galaxy S23 FE specifications","kind":"manufacturer","url":"https://www.samsung.com/us/smartphones/galaxy-s23-fe/","grade":"A"},
+      {"id":"s23fe-source-sakura","title":"Supplied and iterated S23 FE Sakura reference","kind":"reference-mesh","grade":"B"}
+    ],
+    "validation": {"geometry":"passed","slice":"passed","physicalFit":"not-tested","lastChecked":"2026-08-08"},
+    "tags": ["regression", "sakura", "open-button-side"],
+    "notes": "Regression record built from the supplied S23 FE case work. Open button-side geometry is the rigid-material default.",
+    "createdAt": "2026-08-08T00:00:00.000Z",
+    "updatedAt": "2026-08-08T00:00:00.000Z"
+  },
+  {
+    "id": "samsung-galaxy-a52s-sm-a528",
+    "brand": "Samsung",
+    "model": "Galaxy A52s 5G",
+    "variant": "SM-A528 family",
+    "modelNumbers": ["SM-A528B", "SM-A528N", "SM-A5280"],
+    "chassisFamily": "galaxy-a52-shared",
+    "releaseYear": 2021,
+    "revision": 2,
+    "status": "reference-derived",
+    "confidence": 79,
+    "dimensions": {"width":75.1,"length":159.9,"depth":8.4,"cornerRadius":10.0},
+    "features": [
+      {"id":"a52s-camera-island","name":"Camera island","kind":"cameraIsland","side":"back","shape":"roundedRect","center":{"x":24.0,"y":57.0,"z":9.0},"size":{"x":31.0,"y":45.0,"z":1.8},"confidence":88},
+      {"id":"a52s-volume","name":"Volume rocker","kind":"button","side":"screenRight","shape":"slot","center":{"x":37.55,"y":27.0,"z":5.2},"size":{"x":1.3,"y":20.0,"z":3.0},"confidence":78},
+      {"id":"a52s-power","name":"Side key","kind":"button","side":"screenRight","shape":"slot","center":{"x":37.55,"y":2.0,"z":5.2},"size":{"x":1.3,"y":14.0,"z":3.0},"confidence":78},
+      {"id":"a52s-usb","name":"USB-C","kind":"port","side":"bottom","shape":"slot","center":{"x":0.0,"y":-79.95,"z":3.5},"size":{"x":12.3,"y":2.0,"z":4.5},"confidence":80},
+      {"id":"a52s-headphone","name":"3.5 mm headphone jack","kind":"port","side":"bottom","shape":"circle","center":{"x":26.0,"y":-79.95,"z":3.7},"size":{"x":6.2,"y":6.2,"z":6.2},"confidence":76},
+      {"id":"a52s-speaker","name":"Bottom speaker","kind":"speaker","side":"bottom","shape":"slot","center":{"x":-21.0,"y":-79.95,"z":3.5},"size":{"x":14.0,"y":2.0,"z":3.2},"confidence":72}
+    ],
+    "sources": [
+      {"id":"a52s-source-samsung","title":"Samsung Galaxy A52s 5G dimensions","kind":"manufacturer","url":"https://news.samsung.com/br/com-performance-absurda-e-bateria-de-longa-duracao-samsung-apresenta-o-galaxy-a52s-5g-no-brasil/1000","grade":"A"},
+      {"id":"a52s-source-mesh","title":"Supplied A52s plain case reference","kind":"reference-mesh","grade":"B"}
+    ],
+    "validation": {"geometry":"passed","slice":"passed","physicalFit":"not-tested","lastChecked":"2026-08-08"},
+    "tags": ["regression", "shared-chassis", "headphone-jack"],
+    "notes": "The source case is an A52s shell. Camera-island bounds are derived from the supplied mesh; hardware fit still requires a physical phone test.",
+    "createdAt": "2026-08-08T00:00:00.000Z",
+    "updatedAt": "2026-08-08T00:00:00.000Z"
+  },
+  {
+    "id": "samsung-galaxy-a52-sm-a525",
+    "brand": "Samsung",
+    "model": "Galaxy A52",
+    "variant": "SM-A525 / SM-A526 family",
+    "modelNumbers": ["SM-A525F", "SM-A526B", "SM-A526U", "SM-A5260"],
+    "chassisFamily": "galaxy-a52-shared",
+    "releaseYear": 2021,
+    "revision": 1,
+    "status": "compatibility-candidate",
+    "confidence": 67,
+    "dimensions": {"width":75.1,"length":159.9,"depth":8.4,"cornerRadius":10.0},
+    "features": [
+      {"id":"a52-camera-island","name":"Camera island","kind":"cameraIsland","side":"back","shape":"roundedRect","center":{"x":24.0,"y":57.0,"z":9.0},"size":{"x":31.0,"y":45.0,"z":1.8},"confidence":68},
+      {"id":"a52-volume","name":"Volume rocker","kind":"button","side":"screenRight","shape":"slot","center":{"x":37.55,"y":27.0,"z":5.2},"size":{"x":1.3,"y":20.0,"z":3.0},"confidence":66},
+      {"id":"a52-power","name":"Side key","kind":"button","side":"screenRight","shape":"slot","center":{"x":37.55,"y":2.0,"z":5.2},"size":{"x":1.3,"y":14.0,"z":3.0},"confidence":66},
+      {"id":"a52-usb","name":"USB-C","kind":"port","side":"bottom","shape":"slot","center":{"x":0.0,"y":-79.95,"z":3.5},"size":{"x":12.3,"y":2.0,"z":4.5},"confidence":68},
+      {"id":"a52-headphone","name":"3.5 mm headphone jack","kind":"port","side":"bottom","shape":"circle","center":{"x":26.0,"y":-79.95,"z":3.7},"size":{"x":6.2,"y":6.2,"z":6.2},"confidence":65}
+    ],
+    "sources": [
+      {"id":"a52-source-samsung","title":"Samsung Galaxy A52 dimensions","kind":"manufacturer","url":"https://news.samsung.com/in/the-galaxy-a52-a52-5g-and-a72-make-innovation-accessible-to-all","grade":"A"},
+      {"id":"a52-source-shared","title":"A52s shared-chassis compatibility candidate","kind":"inference","grade":"C"}
+    ],
+    "validation": {"geometry":"passed","slice":"passed","physicalFit":"not-tested","lastChecked":"2026-08-08"},
+    "tags": ["regression", "shared-chassis", "compatibility-candidate"],
+    "notes": "Samsung publishes the same overall dimensions as A52s. Feature placements inherit from the A52s reference and must be physically confirmed before production-ready status.",
+    "createdAt": "2026-08-08T00:00:00.000Z",
+    "updatedAt": "2026-08-08T00:00:00.000Z"
+  }
+]

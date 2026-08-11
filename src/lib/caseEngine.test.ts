@@ -1,0 +1,308 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import phonesJson from "../../resources/seed-phones.json";
+import { defaultConfiguration } from "../data/catalog";
+import { defaultFilamentFor } from "../data/filaments";
+import {
+  ensureEngineReady,
+  generateCase,
+  generateFitCoupon,
+  recipeForConfiguration,
+  serializeCase3mf,
+  serializeCaseStl,
+  tuneConfiguration,
+  validateCase,
+} from "./caseEngine";
+import { USB_C_CABLE_CLEARANCE_MM, isUsbCPort } from "./caseGeometry";
+import { rayCrossings } from "./donorMeasure";
+import { diagnoseMesh } from "./mesh";
+import type { IndexedMesh } from "./mesh";
+import type { PhoneRecord } from "../types";
+
+const phones = phonesJson as PhoneRecord[];
+const s24plus = phones.find((phone) => phone.model === "Galaxy S24+")!;
+const s23fe = phones.find((phone) => phone.model === "Galaxy S23 FE")!;
+
+beforeAll(async () => {
+  await ensureEngineReady();
+});
+
+describe("geometry is watertight", () => {
+  for (const phone of phones) {
+    it(`${phone.model} produces a closed solid`, () => {
+      const config = tuneConfiguration(phone, defaultConfiguration(phone.id));
+      const built = generateCase(phone, config);
+      const diagnostics = diagnoseMesh(built.geometry as IndexedMesh);
+      expect(diagnostics.boundaryEdges).toBe(0);
+      expect(diagnostics.nonManifoldEdges).toBe(0);
+      expect(diagnostics.degenerateTriangles).toBe(0);
+      expect(diagnostics.isConsistentlyOriented).toBe(true);
+      // A closed solid enclosing real material has positive volume.
+      expect(diagnostics.signedVolumeMm3).toBeGreaterThan(0);
+    });
+  }
+});
+
+describe("cavity honours the phone it was built for", () => {
+  it("outer size tracks phone size, clearance and wall", () => {
+    const config = tuneConfiguration(s24plus, defaultConfiguration(s24plus.id));
+    const report = validateCase(s24plus, config);
+    const expectedWidth =
+      s24plus.dimensions.width + config.tolerance * 2 + config.wall * 2;
+    expect(report.metrics.outerWidth).toBeCloseTo(expectedWidth, 2);
+  });
+
+  it("a thicker phone yields a taller case", () => {
+    const configA = tuneConfiguration(s24plus, defaultConfiguration(s24plus.id));
+    const configB = tuneConfiguration(s23fe, defaultConfiguration(s23fe.id));
+    const heightA = validateCase(s24plus, configA).metrics.outerHeight;
+    const heightB = validateCase(s23fe, configB).metrics.outerHeight;
+    // S23 FE is 8.2 mm deep against the S24+ at 7.7 mm.
+    expect(heightB).toBeGreaterThan(heightA);
+  });
+});
+
+describe("button side is never mirrored", () => {
+  it("keeps the notch on the stored screen-right edge", () => {
+    const config = tuneConfiguration(s24plus, {
+      ...defaultConfiguration(s24plus.id),
+      pattern: "none",
+    });
+    const built = generateCase(s24plus, config);
+    const mesh = built.geometry as IndexedMesh;
+
+    const buttons = s24plus.features.filter(
+      (feature) => feature.kind === "button" && feature.side === "screenRight",
+    );
+    expect(buttons.length).toBeGreaterThan(0);
+    const midY =
+      buttons.reduce((sum, button) => sum + button.center.y, 0) / buttons.length;
+
+    // Sample the shell at the button height on both edges. The notched side
+    // must reach less far out in X than the untouched side.
+    let maxRight = -Infinity;
+    let maxLeft = Infinity;
+    for (let index = 0; index < mesh.positions.length; index += 3) {
+      const y = mesh.positions[index + 1];
+      const z = mesh.positions[index + 2];
+      if (Math.abs(y - midY) > 4) continue;
+      if (z < config.backThickness + 2) continue;
+      const x = mesh.positions[index];
+      if (x > maxRight) maxRight = x;
+      if (x < maxLeft) maxLeft = x;
+    }
+    expect(maxRight).toBeLessThan(Math.abs(maxLeft));
+  });
+});
+
+describe("USB-C cable clearance", () => {
+  const port = s24plus.features.find(isUsbCPort)!;
+
+  for (const bottomOpening of [true, false]) {
+    it(
+      `keeps a ${USB_C_CABLE_CLEARANCE_MM} mm cable envelope clear with bottomOpening=${bottomOpening}`,
+      () => {
+        const config = tuneConfiguration(s24plus, {
+          ...defaultConfiguration(s24plus.id),
+          pattern: "none",
+          topOpening: false,
+          bottomOpening,
+        });
+        const built = generateCase(s24plus, config);
+        const mesh = built.geometry as IndexedMesh;
+        const outsideOffset = 4;
+        const originY = -built.report.metrics.outerLength / 2 - outsideOffset;
+        const centreZ = config.backThickness + port.center.z;
+        const edgeInset = 0.25;
+
+        for (const z of [
+          centreZ - USB_C_CABLE_CLEARANCE_MM / 2 + edgeInset,
+          centreZ,
+          centreZ + USB_C_CABLE_CLEARANCE_MM / 2 - edgeInset,
+        ]) {
+          const crossings = rayCrossings(
+            mesh,
+            [port.center.x, originY, z],
+            [0, 1, 0],
+          );
+          expect(crossings.length, `no shell crossing found at z=${z}`).toBeGreaterThan(0);
+          expect(
+            crossings[0],
+            `case material intrudes into the USB-C cable envelope at z=${z}`,
+          ).toBeGreaterThan(outsideOffset + config.wall + 0.5);
+        }
+      },
+      60_000,
+    );
+  }
+
+  it("blocks export when a phone record has no USB-C measurement", () => {
+    const withoutUsb = {
+      ...s24plus,
+      features: s24plus.features.filter((feature) => !isUsbCPort(feature)),
+    };
+    const report = validateCase(
+      withoutUsb,
+      tuneConfiguration(withoutUsb, defaultConfiguration(withoutUsb.id)),
+    );
+    expect(report.printable).toBe(false);
+    expect(report.issues.some((issue) => issue.id === "missing-usb-c")).toBe(true);
+  });
+});
+
+describe("artwork actually reaches the solid", () => {
+  /**
+   * A 0.35 mm engraving is almost invisible in a dark 3D preview, so "it looks
+   * plain" is not evidence either way. This checks the volume the artwork
+   * removes against the area it covers, which is unambiguous.
+   */
+  it("removes material equal to pattern area times depth", () => {
+    const plainConfig = tuneConfiguration(s24plus, {
+      ...defaultConfiguration(s24plus.id),
+      pattern: "none",
+    });
+    const engravedConfig = tuneConfiguration(s24plus, {
+      ...defaultConfiguration(s24plus.id),
+      pattern: "asanoha",
+      patternMode: "engraved",
+    });
+
+    const plain = generateCase(s24plus, plainConfig);
+    const engraved = generateCase(s24plus, engravedConfig);
+
+    const plainVolume = Math.abs(
+      diagnoseMesh(plain.geometry as IndexedMesh).signedVolumeMm3,
+    );
+    const engravedVolume = Math.abs(
+      diagnoseMesh(engraved.geometry as IndexedMesh).signedVolumeMm3,
+    );
+    const removed = plainVolume - engravedVolume;
+
+    // The engraving must be substantial, not a token motif.
+    expect(removed, "engraving removed almost nothing").toBeGreaterThan(500);
+    // And it must not eat the whole back.
+    expect(removed).toBeLessThan(plainVolume * 0.25);
+    // The engraved shell has far more surface detail than the plain one.
+    expect((engraved.geometry as IndexedMesh).triangleCount).toBeGreaterThan(
+      (plain.geometry as IndexedMesh).triangleCount * 2,
+    );
+  });
+
+  it("through-cut removes more than engraving", () => {
+    const engraved = generateCase(
+      s24plus,
+      tuneConfiguration(s24plus, {
+        ...defaultConfiguration(s24plus.id),
+        pattern: "asanoha",
+        patternMode: "engraved",
+      }),
+    );
+    const vented = generateCase(
+      s24plus,
+      tuneConfiguration(s24plus, {
+        ...defaultConfiguration(s24plus.id),
+        pattern: "asanoha",
+        patternMode: "vented",
+      }),
+    );
+    const engravedVolume = Math.abs(
+      diagnoseMesh(engraved.geometry as IndexedMesh).signedVolumeMm3,
+    );
+    const ventedVolume = Math.abs(
+      diagnoseMesh(vented.geometry as IndexedMesh).signedVolumeMm3,
+    );
+    expect(ventedVolume).toBeLessThan(engravedVolume);
+  });
+});
+
+describe("export", () => {
+  it("writes a binary STL with a correct triangle count", () => {
+    const config = tuneConfiguration(s24plus, defaultConfiguration(s24plus.id));
+    const built = generateCase(s24plus, config);
+    const stl = serializeCaseStl(built);
+    const triangles = new DataView(
+      stl.buffer,
+      stl.byteOffset,
+      stl.byteLength,
+    ).getUint32(80, true);
+    expect(triangles).toBe((built.geometry as IndexedMesh).triangleCount);
+    expect(stl.byteLength).toBe(84 + triangles * 50);
+  });
+
+  it("writes a 3MF that is a real zip carrying Bambu settings", () => {
+    const config = tuneConfiguration(s24plus, defaultConfiguration(s24plus.id));
+    const built = generateCase(s24plus, config);
+    const filament = defaultFilamentFor(config.material);
+    expect(filament, `no catalog filament for ${config.material}`).toBeDefined();
+
+    const bytes = serializeCase3mf(built, {
+      filament: filament!,
+      recipe: recipeForConfiguration(config),
+      phone: s24plus,
+      date: "2026-08-09",
+    });
+    // Local zip file header magic.
+    expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);
+    const text = new TextDecoder().decode(bytes);
+    expect(text).toContain("Metadata/project_settings.config");
+    expect(text).toContain("3D/Objects/object_1.model");
+  });
+
+  it("refuses to export geometry that is not watertight", async () => {
+    const { buildBambuProject, RECIPES } = await import("./bambuProject");
+    const filament = defaultFilamentFor("pla")!;
+    // A single triangle: three boundary edges, definitively not a solid.
+    const broken: IndexedMesh = {
+      positions: Float64Array.from([0, 0, 0, 10, 0, 0, 0, 10, 0]),
+      indices: Uint32Array.from([0, 1, 2]),
+      vertexCount: 3,
+      triangleCount: 1,
+    };
+    expect(() =>
+      buildBambuProject({
+        mesh: broken,
+        filament,
+        recipe: RECIPES["solid-engraved"],
+        metadata: {
+          title: "broken",
+          plateName: "broken",
+          description: "",
+          profileDescription: "",
+          date: "2026-08-09",
+        },
+      }),
+    ).toThrow(/not watertight/i);
+  });
+});
+
+describe("fit coupon", () => {
+  it("is far smaller than the full case but still closed", () => {
+    const config = tuneConfiguration(s23fe, defaultConfiguration(s23fe.id));
+    const full = generateCase(s23fe, config);
+    const coupon = generateFitCoupon(s23fe, config);
+
+    const fullVolume = Math.abs(
+      diagnoseMesh(full.geometry as IndexedMesh).signedVolumeMm3,
+    );
+    const couponDiagnostics = diagnoseMesh(coupon.geometry as IndexedMesh);
+    expect(couponDiagnostics.boundaryEdges).toBe(0);
+    expect(Math.abs(couponDiagnostics.signedVolumeMm3)).toBeLessThan(fullVolume);
+    expect(Math.abs(couponDiagnostics.signedVolumeMm3)).toBeGreaterThan(0);
+  });
+});
+
+describe("filament catalog", () => {
+  it("resolves a real Bambu preset for every material", () => {
+    for (const material of [
+      "pla",
+      "pla-silk",
+      "tpu-95a",
+      "petg",
+      "petg-translucent",
+    ] as const) {
+      const filament = defaultFilamentFor(material);
+      expect(filament, `missing preset for ${material}`).toBeDefined();
+      expect(filament!.nozzleTemp).toBeGreaterThan(150);
+      expect(filament!.bedTemp).toBeGreaterThan(0);
+    }
+  });
+});

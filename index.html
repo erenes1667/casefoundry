@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      CaseFoundry is fully offline: every asset is bundled and nothing is
+      fetched at runtime. This policy pins that down, so a malformed phone pack
+      or imported database cannot become script execution or data exfiltration.
+
+      'unsafe-eval' is required, and it is a real concession rather than a
+      formality. The Manifold geometry kernel is an Emscripten module and its
+      Embind layer builds its invoker functions with `new Function(...)` at
+      load time. Without it the kernel never initialises and the app silently
+      renders nothing. 'wasm-unsafe-eval' alone is NOT sufficient: that permits
+      WebAssembly compilation, not the JavaScript glue that drives it.
+
+      What still contains the risk: default-src is 'none', so nothing loads
+      unless explicitly allowed; connect-src is limited to 'self', so evaluated
+      code has no network path to exfiltrate anything; there is no remote
+      content in the app at all; and untrusted phone packs are validated in the
+      main process before they reach the renderer.
+
+      frame-ancestors is deliberately absent: it is ignored when delivered via
+      a meta element, and Electron never embeds this window in a frame.
+      style-src allows inline styles because the bundler injects them.
+      The dev server relaxes this further at serve time, see vite.config.ts.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="CaseFoundry offline phone measurement database and parametric case studio"
+    />
+    <title>CaseFoundry</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

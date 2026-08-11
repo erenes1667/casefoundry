@@ -1,0 +1,88 @@
+{
+  "name": "casefoundry-macos",
+  "version": "2026.8.3",
+  "private": true,
+  "author": "CaseFoundry",
+  "description": "Offline macOS phone measurement database and parametric case studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/erenes1667/casefoundry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/erenes1667/casefoundry/issues"
+  },
+  "homepage": "https://github.com/erenes1667/casefoundry#readme",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run --testTimeout=30000",
+    "test:watch": "vitest",
+    "package:mac": "npm run build && electron-builder --mac zip --arm64 --x64",
+    "package:mac:arm64": "npm run build && electron-builder --mac zip --arm64",
+    "package:mac:x64": "npm run build && electron-builder --mac zip --x64",
+    "test:gates": "vitest run --config scripts/vitest.export.config.ts",
+    "qa": "npm run build && npm run test && npm run test:gates && npm audit --omit=dev",
+    "filaments": "node scripts/build-filament-catalog.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.2",
+    "lucide-react": "0.468.0",
+    "manifold-3d": "^3.5.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "three": "0.181.1"
+  },
+  "devDependencies": {
+    "@jscad/modeling": "^2.13.0",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/three": "0.181.0",
+    "@vitejs/plugin-react": "5.1.1",
+    "concurrently": "^9.2.4",
+    "cross-env": "10.1.0",
+    "electron": "43.3.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10",
+    "wait-on": "9.0.1"
+  },
+  "build": {
+    "appId": "com.casefoundry.desktop",
+    "productName": "CaseFoundry",
+    "artifactName": "CaseFoundry-${version}-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "resources/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/seed-phones.json",
+        "to": "seed-phones.json"
+      }
+    ],
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "category": "public.app-category.graphics-design",
+      "icon": "resources/icon.png",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "darkModeSupport": true
+    },
+    "electronLanguages": [
+      "en"
+    ]
+  }
+}

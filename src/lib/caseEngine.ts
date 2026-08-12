@@ -1,4 +1,5 @@
 import { architectures, materials, printProfiles } from "../data/catalog";
+import { defaultFilamentFor } from "../data/filaments";
 import type {
   CaseConfiguration,
   GeneratedCase,
@@ -373,6 +374,7 @@ export function tuneConfiguration(
   configuration: CaseConfiguration,
 ): CaseConfiguration {
   const material = materials[configuration.material];
+  const filament = defaultFilamentFor(configuration.material);
   const flexible = material.flexible;
   const preferredArchitecture = flexible
     ? "tpu-bumper"
@@ -395,7 +397,11 @@ export function tuneConfiguration(
     ...configuration,
     phoneId: phone.id,
     architecture,
-    tolerance: material.defaultTolerance,
+    // Use the same measured fit rule as the slicer gate and 3MF exporter.
+    // Material defaults remain a safe fallback if a bundled Bambu preset is
+    // unavailable, but must not silently make the Studio cavity looser than
+    // the geometry that passed release QA.
+    tolerance: filament?.design.cavityClearance ?? material.defaultTolerance,
     wall: material.recommendedWall,
     backThickness: material.recommendedBack,
     lipHeight: flexible

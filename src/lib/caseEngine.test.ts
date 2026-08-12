@@ -9,10 +9,15 @@ import {
   recipeForConfiguration,
   serializeCase3mf,
   serializeCaseStl,
+  specFromConfiguration,
   tuneConfiguration,
   validateCase,
 } from "./caseEngine";
-import { USB_C_CABLE_CLEARANCE_MM, isUsbCPort } from "./caseGeometry";
+import {
+  USB_C_CABLE_CLEARANCE_MM,
+  caseDimensions,
+  isUsbCPort,
+} from "./caseGeometry";
 import { rayCrossings } from "./donorMeasure";
 import { diagnoseMesh } from "./mesh";
 import type { IndexedMesh } from "./mesh";
@@ -59,6 +64,20 @@ describe("cavity honours the phone it was built for", () => {
     // S23 FE is 8.2 mm deep against the S24+ at 7.7 mm.
     expect(heightB).toBeGreaterThan(heightA);
   });
+
+  it("uses the measured S23 FE corner radius and release-gated cavity rule", () => {
+    const config = tuneConfiguration(s23fe, {
+      ...defaultConfiguration(s23fe.id),
+      material: "pla-silk",
+    });
+    const dimensions = caseDimensions(s23fe, specFromConfiguration(config));
+
+    expect(s23fe.dimensions.cornerRadius).toBe(11);
+    expect(config.tolerance).toBe(0.34);
+    expect(dimensions.innerWidth).toBeCloseTo(77.18, 6);
+    expect(dimensions.innerLength).toBeCloseTo(158.68, 6);
+    expect(dimensions.innerRadius).toBeCloseTo(11.34, 6);
+  });
 });
 
 describe("button side is never mirrored", () => {
@@ -95,44 +114,54 @@ describe("button side is never mirrored", () => {
 });
 
 describe("USB-C cable clearance", () => {
-  const port = s24plus.features.find(isUsbCPort)!;
+  for (const phone of [s23fe, s24plus]) {
+    const port = phone.features.find(isUsbCPort)!;
+    for (const bottomOpening of [true, false]) {
+      it(
+        `keeps the ${USB_C_CABLE_CLEARANCE_MM} mm ${phone.model} cable envelope clear with bottomOpening=${bottomOpening}`,
+        () => {
+          const config = tuneConfiguration(phone, {
+            ...defaultConfiguration(phone.id),
+            pattern: "none",
+            topOpening: false,
+            bottomOpening,
+          });
+          const built = generateCase(phone, config);
+          const mesh = built.geometry as IndexedMesh;
+          const outsideOffset = 4;
+          const originY = -built.report.metrics.outerLength / 2 - outsideOffset;
+          const centreZ = config.backThickness + port.center.z;
+          const edgeInset = 0.25;
+          // Probe the height at several points across the molded connector
+          // housing. The old stadium cutout passed only at x=0.
+          const cableCornerRadius = 1.2;
+          const halfUsableWidth = port.size.x / 2 - cableCornerRadius;
 
-  for (const bottomOpening of [true, false]) {
-    it(
-      `keeps a ${USB_C_CABLE_CLEARANCE_MM} mm cable envelope clear with bottomOpening=${bottomOpening}`,
-      () => {
-        const config = tuneConfiguration(s24plus, {
-          ...defaultConfiguration(s24plus.id),
-          pattern: "none",
-          topOpening: false,
-          bottomOpening,
-        });
-        const built = generateCase(s24plus, config);
-        const mesh = built.geometry as IndexedMesh;
-        const outsideOffset = 4;
-        const originY = -built.report.metrics.outerLength / 2 - outsideOffset;
-        const centreZ = config.backThickness + port.center.z;
-        const edgeInset = 0.25;
-
-        for (const z of [
-          centreZ - USB_C_CABLE_CLEARANCE_MM / 2 + edgeInset,
-          centreZ,
-          centreZ + USB_C_CABLE_CLEARANCE_MM / 2 - edgeInset,
-        ]) {
-          const crossings = rayCrossings(
-            mesh,
-            [port.center.x, originY, z],
-            [0, 1, 0],
-          );
-          expect(crossings.length, `no shell crossing found at z=${z}`).toBeGreaterThan(0);
-          expect(
-            crossings[0],
-            `case material intrudes into the USB-C cable envelope at z=${z}`,
-          ).toBeGreaterThan(outsideOffset + config.wall + 0.5);
-        }
-      },
-      60_000,
-    );
+          for (const x of [
+            port.center.x - halfUsableWidth,
+            port.center.x,
+            port.center.x + halfUsableWidth,
+          ]) {
+            for (const z of [
+              centreZ - USB_C_CABLE_CLEARANCE_MM / 2 + edgeInset,
+              centreZ,
+              centreZ + USB_C_CABLE_CLEARANCE_MM / 2 - edgeInset,
+            ]) {
+              const crossings = rayCrossings(mesh, [x, originY, z], [0, 1, 0]);
+              expect(
+                crossings.length,
+                `no shell crossing found at x=${x}, z=${z}`,
+              ).toBeGreaterThan(0);
+              expect(
+                crossings[0],
+                `case material intrudes into the USB-C cable envelope at x=${x}, z=${z}`,
+              ).toBeGreaterThan(outsideOffset + config.wall + 0.5);
+            }
+          }
+        },
+        60_000,
+      );
+    }
   }
 
   it("blocks export when a phone record has no USB-C measurement", () => {

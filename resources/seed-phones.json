@@ -51,10 +51,10 @@
     "modelNumbers": ["SM-S711B", "SM-S711U", "SM-S711U1", "SM-S711N", "SM-S7110"],
     "chassisFamily": "galaxy-s23-fe",
     "releaseYear": 2023,
-    "revision": 4,
+    "revision": 5,
     "status": "reference-derived",
     "confidence": 80,
-    "dimensions": {"width":76.5,"length":158.0,"depth":8.2,"cornerRadius":9.0},
+    "dimensions": {"width":76.5,"length":158.0,"depth":8.2,"cornerRadius":11.0},
     "features": [
       {"id":"s23fe-lens-1","name":"Wide camera","kind":"camera","side":"back","shape":"circle","center":{"x":27.0,"y":62.0,"z":9.1},"size":{"x":14.2,"y":14.2,"z":2.0},"confidence":80},
       {"id":"s23fe-lens-2","name":"Telephoto camera","kind":"camera","side":"back","shape":"circle","center":{"x":27.0,"y":45.0,"z":9.1},"size":{"x":14.2,"y":14.2,"z":2.0},"confidence":80},
@@ -70,11 +70,11 @@
       {"id":"s23fe-source-samsung","title":"Samsung Galaxy S23 FE specifications","kind":"manufacturer","url":"https://www.samsung.com/us/smartphones/galaxy-s23-fe/","grade":"A"},
       {"id":"s23fe-source-sakura","title":"Supplied and iterated S23 FE Sakura reference","kind":"reference-mesh","grade":"B"}
     ],
-    "validation": {"geometry":"passed","slice":"passed","physicalFit":"not-tested","lastChecked":"2026-08-08"},
+    "validation": {"geometry":"passed","slice":"passed","physicalFit":"not-tested","lastChecked":"2026-08-12"},
     "tags": ["regression", "sakura", "open-button-side"],
-    "notes": "Regression record built from the supplied S23 FE case work. Open button-side geometry is the rigid-material default.",
+    "notes": "Regression record built from the supplied S23 FE case work. The 11 mm body corner radius comes from the measured project record. Open button-side geometry is the rigid-material default.",
     "createdAt": "2026-08-08T00:00:00.000Z",
-    "updatedAt": "2026-08-08T00:00:00.000Z"
+    "updatedAt": "2026-08-12T00:00:00.000Z"
   },
   {
     "id": "samsung-galaxy-a52s-sm-a528",

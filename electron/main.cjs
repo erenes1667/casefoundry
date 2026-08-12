@@ -7,8 +7,8 @@ const {
   validatePhone,
   validatePhoneList,
 } = require("./validate.cjs");
+const { SCHEMA_VERSION, migrateCatalog } = require("./migrate.cjs");
 
-const SCHEMA_VERSION = 1;
 let mainWindow;
 let store;
 
@@ -72,7 +72,20 @@ class CatalogStore {
       if (!Array.isArray(parsed.phones) || !Array.isArray(parsed.projects)) {
         throw new Error("Invalid CaseFoundry database structure");
       }
-      return parsed;
+      const migration = migrateCatalog(parsed, readSeedPhones());
+      if (migration.changed) {
+        this.createBackup("before-migration");
+        migration.data.audit ||= [];
+        for (const entry of migration.actions.toReversed()) {
+          migration.data.audit.unshift({
+            id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            at: new Date().toISOString(),
+            ...entry,
+          });
+        }
+        this.write(migration.data);
+      }
+      return migration.data;
     } catch (error) {
       const damaged = `${this.file}.damaged-${Date.now()}`;
       fs.copyFileSync(this.file, damaged);
@@ -200,6 +213,8 @@ class CatalogStore {
     // while the actual selection silently stays on the first record. The user
     // sees one handset selected and exports a case built for another, with no
     // error anywhere.
+    const migration = migrateCatalog(next, readSeedPhones());
+    next = migration.data;
     next.phones = validatePhoneList(next.phones).map((phone) => ({
       ...phone,
       id: safeId(phone.id || `${phone.brand}-${phone.model}`, "phone"),
@@ -207,6 +222,13 @@ class CatalogStore {
     this.createBackup("before-import");
     next.schemaVersion = SCHEMA_VERSION;
     next.audit ||= [];
+    for (const entry of migration.actions.toReversed()) {
+      next.audit.unshift({
+        id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        at: new Date().toISOString(),
+        ...entry,
+      });
+    }
     next.audit.unshift({
       id: `audit-${Date.now()}`,
       at: new Date().toISOString(),

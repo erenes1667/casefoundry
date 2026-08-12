@@ -12,6 +12,7 @@ export default defineConfig({
       "scripts/slice-gate.test.ts",
       "scripts/diagnose-csg.test.ts",
       "scripts/validate.test.ts",
+      "scripts/migrate.test.ts",
       "scripts/donor-measure.test.ts",
     ],
   },

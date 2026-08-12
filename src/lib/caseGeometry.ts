@@ -306,7 +306,13 @@ function endFeatureCutout(
   );
 
   let profile: Shape;
-  if (feature.shape === "circle") {
+  if (isUsbCPort(feature)) {
+    // A stadium reaches the requested height only on its centreline and
+    // quickly tapers toward the ends. That clears the metal plug but can still
+    // pinch a wider molded cable housing. Keep modestly rounded corners while
+    // preserving the 7 mm envelope across the usable connector width.
+    profile = roundedRect(width, height, Math.min(1.2, height / 3));
+  } else if (feature.shape === "circle") {
     const diameter = Math.max(width, height);
     profile = roundedRect(diameter, diameter, diameter / 2);
   } else if (feature.shape === "slot") {

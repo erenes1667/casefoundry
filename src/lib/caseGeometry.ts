@@ -15,6 +15,34 @@ import type { PhoneFeature, PhoneRecord } from "../types";
 /** Minimum vertical opening for a molded USB-C cable housing, in mm. */
 export const USB_C_CABLE_CLEARANCE_MM = 7;
 
+/** Minimum continuous material on either face of buried artwork, in mm. */
+export const MIN_PATTERN_SKIN_MM = 0.55;
+
+/** Smallest buried channel that remains intentional after slicing, in mm. */
+export const MIN_SEALED_PATTERN_DEPTH_MM = 0.2;
+
+/**
+ * Resolves the actual buried-artwork layers used by both geometry and QA.
+ * Sharing this calculation prevents the preview, export, and warning panel
+ * from disagreeing about how much continuous material remains.
+ */
+export function sealedPatternLayers(
+  backThickness: number,
+  requestedDepth: number,
+): { outerSkin: number; depth: number; innerSkin: number } {
+  const outerSkin = MIN_PATTERN_SKIN_MM;
+  const maximumDepth = backThickness - MIN_PATTERN_SKIN_MM * 2;
+  const depth = Math.max(
+    MIN_SEALED_PATTERN_DEPTH_MM,
+    Math.min(requestedDepth, maximumDepth),
+  );
+  return {
+    outerSkin,
+    depth,
+    innerSkin: backThickness - outerSkin - depth,
+  };
+}
+
 /** Recognises the common labels used for USB-C ports in imported phone packs. */
 export function isUsbCPort(feature: PhoneFeature): boolean {
   if (
@@ -65,7 +93,7 @@ export interface CaseSpec {
   /** Leave the lip only at the four corners, as rigid cases need. */
   cornerLipOnly: boolean;
   pattern: "none" | "asanoha" | "sakura" | "kumiko-hex";
-  patternMode: "engraved" | "through" | "sealed";
+  patternMode: "engraved" | "through" | "sealed" | "inlay";
   patternDepth: number;
   patternStroke: number;
   patternScale: number;
@@ -549,6 +577,8 @@ export function patternShape(
 
 export interface BuiltCase {
   solid: Solid;
+  /** Separate opaque artwork volume for a two-filament assembled 3MF. */
+  inlay?: Solid;
   dimensions: CaseDimensions;
   cutoutCount: number;
 }
@@ -657,6 +687,7 @@ export function buildCase(phone: PhoneRecord, spec: CaseSpec): BuiltCase {
   }
 
   // --- artwork ----------------------------------------------------------
+  let inlay: Solid | undefined;
   const artwork = patternShape(phone, dimensions, spec);
   if (artwork) {
     if (spec.patternMode === "through") {
@@ -674,18 +705,19 @@ export function buildCase(phone: PhoneRecord, spec: CaseSpec): BuiltCase {
       // skin, so the exterior stays smooth and the pattern reads through
       // translucent filament. Skins are kept above the printable floor at both
       // faces so neither side becomes a single fragile layer.
-      const outerSkin = Math.max(0.3, Math.min(0.42, spec.backThickness * 0.24));
-      const depth = Math.max(
-        0.2,
-        Math.min(spec.patternDepth, spec.backThickness - outerSkin - 0.45),
+      const { outerSkin, depth } = sealedPatternLayers(
+        spec.backThickness,
+        spec.patternDepth,
       );
       const cut = extrude(artwork, outerSkin, depth);
       const next = shell.subtract(cut);
-      dispose(shell, cut);
+      dispose(shell);
       shell = next;
+      if (spec.patternMode === "inlay") inlay = cut;
+      else cut.delete();
     }
     artwork.delete();
   }
 
-  return { solid: shell, dimensions, cutoutCount: cutouts.length };
+  return { solid: shell, inlay, dimensions, cutoutCount: cutouts.length };
 }

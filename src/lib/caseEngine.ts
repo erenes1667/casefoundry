@@ -13,6 +13,7 @@ import {
   buildCase,
   caseDimensions,
   isUsbCPort,
+  sealedPatternLayers,
   type CaseSpec,
 } from "./caseGeometry";
 import { box, csg, dispose, initCsg, solidToIndexedMesh, type Solid } from "./csg";
@@ -83,6 +84,8 @@ export function specFromConfiguration(
     patternMode:
       configuration.patternMode === "vented"
         ? "through"
+        : configuration.patternMode === "inlay"
+          ? "inlay"
         : configuration.patternMode === "sealed"
           ? "sealed"
           : "engraved",
@@ -98,7 +101,7 @@ export function recipeForConfiguration(
 ): PrintRecipe {
   if (
     configuration.material === "petg-translucent" &&
-    configuration.patternMode === "sealed"
+    (configuration.patternMode === "sealed" || configuration.patternMode === "inlay")
   ) {
     return RECIPES["translucent-glass"];
   }
@@ -123,17 +126,13 @@ function makeReport(
     minimumSkin = config.backThickness;
   } else if (config.patternMode === "vented") {
     minimumSkin = 0;
-  } else if (config.patternMode === "sealed") {
-    const outerSkin = Math.max(
-      0.3,
-      Math.min(0.42, config.backThickness * 0.24),
-    );
-    const depth = Math.max(
-      0.2,
-      Math.min(config.patternDepth, config.backThickness - outerSkin - 0.45),
+  } else if (config.patternMode === "sealed" || config.patternMode === "inlay") {
+    const { outerSkin, depth, innerSkin } = sealedPatternLayers(
+      config.backThickness,
+      config.patternDepth,
     );
     // Both faces matter: the thinner of the two is what fails first.
-    minimumSkin = Math.min(outerSkin, config.backThickness - outerSkin - depth);
+    minimumSkin = Math.min(outerSkin, innerSkin);
   } else {
     minimumSkin = config.backThickness - config.patternDepth;
   }
@@ -187,12 +186,16 @@ function makeReport(
       id: "pattern-safe",
       severity: config.patternMode === "vented" ? "warning" : "pass",
       title:
-        config.patternMode === "sealed"
-          ? "Artwork is sealed inside"
+        config.patternMode === "sealed" || config.patternMode === "inlay"
+          ? config.patternMode === "inlay"
+            ? "Opaque inlay is sealed inside"
+            : "Artwork is sealed inside"
           : "Artwork spacing checked",
       detail:
-        config.patternMode === "sealed"
-          ? "The decorative inlay is buried between continuous exterior and phone-facing skins."
+        config.patternMode === "sealed" || config.patternMode === "inlay"
+          ? config.patternMode === "inlay"
+            ? "The opaque PETG inlay is a separate 3MF part enclosed between continuous translucent skins."
+            : "The optical channel is buried between continuous exterior and phone-facing skins."
           : config.patternMode === "vented"
             ? "Through-vents reduce dust protection and need a clean first layer."
             : "Motifs use filled, reinforced geometry instead of loose hairline islands.",
@@ -207,6 +210,21 @@ function makeReport(
       title: "Architecture and material conflict",
       detail: `${architecture.name} is not intended for ${material.name}.`,
       field: "architecture",
+    });
+  }
+
+  if (
+    config.pattern !== "none" &&
+    config.patternMode === "inlay" &&
+    config.material !== "petg-translucent"
+  ) {
+    add({
+      id: "inlay-material",
+      severity: "error",
+      title: "Opaque inlay needs a translucent PETG shell",
+      detail:
+        "Choose Translucent PETG for the shell. The 3MF assigns opaque PETG to the buried artwork separately.",
+      field: "material",
     });
   }
 
@@ -439,6 +457,17 @@ export function generateCase(
       color: configuration.color,
     },
   ];
+  if (built.inlay) {
+    const inlayMesh = solidToIndexedMesh(built.inlay);
+    built.inlay.delete();
+    parts.push({
+      id: "inlay",
+      name: "Opaque Kumiko inlay",
+      role: "inlay",
+      geometry: inlayMesh,
+      color: "#202020",
+    });
+  }
 
   return {
     geometry: mesh,
@@ -593,6 +622,7 @@ export function serializeCase3mf(
   generated: GeneratedCase,
   options: {
     filament: FilamentChoice;
+    inlayFilament?: FilamentChoice;
     recipe: PrintRecipe;
     phone: PhoneRecord;
     date: string;
@@ -601,9 +631,23 @@ export function serializeCase3mf(
 ): Uint8Array {
   const mesh = generated.geometry as IndexedMesh;
   const { phone } = options;
+  const inlay = generated.parts.find((part) => part.role === "inlay");
+  if (inlay && !options.inlayFilament) {
+    throw new Error("Two-material artwork requires an opaque PETG inlay profile.");
+  }
   return buildBambuProject({
     mesh,
     filament: options.filament,
+    filaments: inlay
+      ? [options.filament, options.inlayFilament!]
+      : undefined,
+    parts: inlay
+      ? generated.parts.map((part) => ({
+          mesh: part.geometry as IndexedMesh,
+          name: part.name,
+          filamentIndex: part.role === "inlay" ? 2 : 1,
+        }))
+      : undefined,
     recipe: options.recipe,
     printer: options.printer,
     metadata: {

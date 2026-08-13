@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { strFromU8, unzipSync } from "fflate";
 import { beforeAll, describe, expect, it } from "vitest";
 import phonesJson from "../resources/seed-phones.json";
 import filamentCatalog from "../src/data/filaments.json";
@@ -90,12 +91,28 @@ const CASES: Array<{
   recipe: keyof typeof RECIPES;
   printer?: PrinterId;
   spec?: Partial<CaseSpec>;
+  twoMaterial?: boolean;
+  variant?: string;
 }> = [
   {
     phone: "Galaxy S24+",
     filament: "Bambu PETG Translucent @BBL P2S 0.4 nozzle",
     recipe: "translucent-glass",
     spec: { pattern: "asanoha", patternMode: "sealed", backThickness: 1.5 },
+  },
+  {
+    phone: "Galaxy S23 FE",
+    filament: "Bambu PETG Translucent @BBL P2S 0.4 nozzle",
+    recipe: "translucent-glass",
+    spec: { pattern: "asanoha", patternMode: "sealed", backThickness: 1.55 },
+  },
+  {
+    phone: "Galaxy S23 FE",
+    filament: "Bambu PETG Translucent @BBL P2S 0.4 nozzle",
+    recipe: "translucent-glass",
+    spec: { pattern: "asanoha", patternMode: "inlay", backThickness: 1.55 },
+    twoMaterial: true,
+    variant: "opaque-inlay",
   },
   {
     phone: "Galaxy S23 FE",
@@ -167,7 +184,7 @@ describe("export slices in Bambu Studio", () => {
     // Skip visibly rather than passing. A green run on a machine without Bambu
     // Studio would otherwise claim the export slices when nothing sliced it.
     it.skipIf(!hasBambu)(
-      `${testCase.phone} / ${testCase.filament} / ${testCase.printer ?? DEFAULT_PRINTER}`,
+      `${testCase.phone} / ${testCase.filament} / ${testCase.variant ?? testCase.printer ?? DEFAULT_PRINTER}`,
       () => {
         const phone = phones.find((entry) => entry.model === testCase.phone);
         if (!phone) throw new Error(`Missing phone: ${testCase.phone}`);
@@ -176,6 +193,7 @@ describe("export slices in Bambu Studio", () => {
         const spec = specFor(filament, testCase.recipe, testCase.spec);
         const built = buildCase(phone, spec);
         const mesh = solidToIndexedMesh(built.solid);
+        const inlayMesh = built.inlay ? solidToIndexedMesh(built.inlay) : undefined;
 
         // --- check 1: watertight before anything is written ---
         const diagnostics = diagnoseMesh(mesh);
@@ -188,13 +206,25 @@ describe("export slices in Bambu Studio", () => {
         expect(diagnostics.isConsistentlyOriented, "winding consistency").toBe(true);
 
         const printer = testCase.printer ?? DEFAULT_PRINTER;
-        const stem = `${phone.model.replaceAll(" ", "-")}-${filament.type}-${testCase.recipe}-${printer}`;
+        const stem = `${phone.model.replaceAll(" ", "-")}-${filament.type}-${testCase.recipe}-${testCase.variant ?? printer}`;
         const target = path.join(outputDirectory, `${stem}.3mf`);
 
         const choice: FilamentChoice = { ...filament, colour: "#EBEBEB" };
+        const opaque = testCase.twoMaterial
+          ? filamentByName("Bambu PETG Basic @BBL P2S 0.4 nozzle")
+          : undefined;
         const project = buildBambuProject({
           mesh,
           filament: choice,
+          filaments: opaque
+            ? [choice, { ...opaque, colour: "#202020" }]
+            : undefined,
+          parts: inlayMesh
+            ? [
+                { mesh, name: "Translucent case shell", filamentIndex: 1 },
+                { mesh: inlayMesh, name: "Opaque Kumiko inlay", filamentIndex: 2 },
+              ]
+            : undefined,
           recipe: RECIPES[testCase.recipe],
           printer,
           metadata: {
@@ -242,6 +272,18 @@ describe("export slices in Bambu Studio", () => {
           .filter((line) => !/Invalid T command/i.test(line))
           .filter((line) => !/ZFiller: encounter idx from clip/i.test(line));
         expect(realErrors, `Bambu Studio reported errors for ${stem}`).toEqual([]);
+        if (testCase.twoMaterial) {
+          const sliced = unzipSync(new Uint8Array(fs.readFileSync(gcode)));
+          const sliceInfoBytes = sliced["Metadata/slice_info.config"];
+          expect(sliceInfoBytes, "Bambu output is missing slice metadata").toBeDefined();
+          const sliceInfo = strFromU8(sliceInfoBytes);
+          expect(sliceInfo, "translucent slot was not used by the slicer").toContain(
+            '<filament id="1"',
+          );
+          expect(sliceInfo, "opaque slot was not used by the slicer").toContain(
+            '<filament id="2"',
+          );
+        }
       },
       900_000,
     );

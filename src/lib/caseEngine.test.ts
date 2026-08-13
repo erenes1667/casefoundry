@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { strFromU8, unzipSync } from "fflate";
 import phonesJson from "../../resources/seed-phones.json";
 import { defaultConfiguration } from "../data/catalog";
 import { defaultFilamentFor } from "../data/filaments";
@@ -240,6 +241,102 @@ describe("artwork actually reaches the solid", () => {
       diagnoseMesh(vented.geometry as IndexedMesh).signedVolumeMm3,
     );
     expect(ventedVolume).toBeLessThan(engravedVolume);
+  });
+
+  it("auto-tunes a printable translucent Kumiko S23 FE case", () => {
+    const config = tuneConfiguration(s23fe, {
+      ...defaultConfiguration(s23fe.id),
+      material: "petg-translucent",
+      pattern: "asanoha",
+    });
+    const report = validateCase(s23fe, config);
+    const built = generateCase(s23fe, config);
+    const diagnostics = diagnoseMesh(built.geometry as IndexedMesh);
+
+    expect(config.architecture).toBe("translucent-art");
+    expect(config.patternMode).toBe("sealed");
+    expect(config.backThickness).toBe(1.55);
+    expect(config.patternDepth).toBe(0.4);
+    expect(report.metrics.minimumSkin).toBe(0.55);
+    expect(report.printable).toBe(true);
+    expect(report.issues.some((issue) => issue.id === "skin-thin")).toBe(false);
+    expect(diagnostics.boundaryEdges).toBe(0);
+    expect(diagnostics.nonManifoldEdges).toBe(0);
+  });
+
+  it("still blocks a manually thinned sealed backplate", () => {
+    const config = {
+      ...tuneConfiguration(s23fe, {
+        ...defaultConfiguration(s23fe.id),
+        material: "petg-translucent" as const,
+        pattern: "asanoha" as const,
+      }),
+      backThickness: 1.25,
+    };
+    const report = validateCase(s23fe, config);
+
+    expect(report.printable).toBe(false);
+    expect(report.issues.some((issue) => issue.id === "skin-thin")).toBe(true);
+  });
+
+  it("blocks a two-material inlay without a translucent PETG shell", () => {
+    const config = {
+      ...tuneConfiguration(s23fe, {
+        ...defaultConfiguration(s23fe.id),
+        material: "petg" as const,
+        pattern: "asanoha" as const,
+      }),
+      patternMode: "inlay" as const,
+    };
+    const report = validateCase(s23fe, config);
+
+    expect(report.printable).toBe(false);
+    expect(report.issues.some((issue) => issue.id === "inlay-material")).toBe(true);
+  });
+
+  it("exports translucent shell and opaque Kumiko as aligned filament parts", () => {
+    const config = {
+      ...tuneConfiguration(s23fe, {
+        ...defaultConfiguration(s23fe.id),
+        material: "petg-translucent" as const,
+        pattern: "asanoha" as const,
+      }),
+      patternMode: "inlay" as const,
+    };
+    const generated = generateCase(s23fe, config);
+    const shellFilament = defaultFilamentFor("petg-translucent")!;
+    const inlayFilament = defaultFilamentFor("petg")!;
+
+    expect(generated.report.printable).toBe(true);
+    expect(generated.parts.map((part) => part.role)).toEqual(["shell", "inlay"]);
+    for (const part of generated.parts) {
+      const diagnostics = diagnoseMesh(part.geometry as IndexedMesh);
+      expect(diagnostics.boundaryEdges, `${part.name} boundaries`).toBe(0);
+      expect(diagnostics.nonManifoldEdges, `${part.name} non-manifold`).toBe(0);
+      expect(Math.abs(diagnostics.signedVolumeMm3)).toBeGreaterThan(0);
+    }
+
+    const bytes = serializeCase3mf(generated, {
+      filament: { ...shellFilament, colour: "#d9ffff" },
+      inlayFilament: { ...inlayFilament, colour: "#202020" },
+      recipe: recipeForConfiguration(config),
+      phone: s23fe,
+      date: "2026-08-13",
+    });
+    const files = unzipSync(bytes);
+    const settings = JSON.parse(strFromU8(files["Metadata/project_settings.config"]));
+    const modelSettings = strFromU8(files["Metadata/model_settings.config"]);
+    const objectModel = strFromU8(files["3D/Objects/object_1.model"]);
+
+    expect(files["3D/Objects/object_1.model"]).toBeDefined();
+    expect(objectModel).toContain('<object id="1"');
+    expect(objectModel).toContain('<object id="2"');
+    expect(settings.filament_settings_id).toHaveLength(2);
+    expect(settings.filament_colour).toEqual(["#d9ffff", "#202020"]);
+    expect(settings.enable_prime_tower).toBe("1");
+    expect(modelSettings).toContain('name" value="Case shell"');
+    expect(modelSettings).toContain('name" value="Opaque Kumiko inlay"');
+    expect(modelSettings).toContain('key="extruder" value="2"');
   });
 });
 

@@ -86,7 +86,9 @@ export const materials: Record<
     minimumWall: 1.6,
     minimumBack: 1.25,
     recommendedWall: 1.7,
-    recommendedBack: 1.35,
+    // 0.55 mm exterior skin + 0.40 mm optical channel + 0.60 mm phone-side
+    // skin. The old 1.35 mm default contradicted the 0.55 mm skin gate.
+    recommendedBack: 1.55,
     recommendedPatternDepth: 0.4,
     defaultTolerance: 0.34,
     flexible: false,

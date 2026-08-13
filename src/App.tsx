@@ -491,12 +491,25 @@ export function App() {
   const exportPrintable = async (format: "stl" | "3mf") => {
     const built = await ensureFresh();
     if (!built || !selectedPhone) return;
+    const hasInlay = built.parts.some((part) => part.role === "inlay");
     if (!built.report.printable) {
       notify({ kind: "error", title: "Export blocked by preflight", detail: "Resolve the red DFM checks before exporting printable geometry." });
       return;
     }
+    if (format === "stl" && hasInlay) {
+      notify({
+        kind: "error",
+        title: "Two-material artwork requires 3MF",
+        detail: "Use Export 3MF so the translucent shell and opaque inlay keep their separate filament assignments.",
+      });
+      return;
+    }
     try {
       const filament = defaultFilamentFor(configuration.material);
+      const inlayFilament =
+        hasInlay
+          ? defaultFilamentFor("petg")
+          : undefined;
       if (format === "3mf" && !filament) {
         notify({
           kind: "error",
@@ -511,7 +524,10 @@ export function App() {
         format === "stl"
           ? serializeCaseStl(built)
           : serializeCase3mf(built, {
-              filament: filament!,
+              filament: { ...filament!, colour: configuration.color },
+              inlayFilament: inlayFilament
+                ? { ...inlayFilament, colour: "#202020" }
+                : undefined,
               recipe: recipeForConfiguration(configuration),
               phone: selectedPhone,
               date: new Date().toISOString().slice(0, 10),
@@ -1050,7 +1066,8 @@ function StudioView({
                 ))}
               </div>
               <FieldSelect label="Artwork construction" value={configuration.patternMode} onChange={(value) => onPatch({ patternMode: value as CaseConfiguration["patternMode"] })}>
-                <option value="sealed">Buried inlay · closed both sides</option>
+                <option value="sealed">Buried optical channel · one filament</option>
+                <option value="inlay" disabled={configuration.material !== "petg-translucent"}>Opaque inlay · translucent + opaque PETG</option>
                 <option value="engraved">Exterior engraving</option>
                 <option value="vented">Through-vented</option>
               </FieldSelect>
@@ -1058,7 +1075,10 @@ function StudioView({
               <RangeField label="Pattern scale" value={configuration.patternScale} min={0.75} max={1.5} step={0.05} unit="×" onChange={(value) => onPatch({ patternScale: value })} />
               <label className="color-field"><span>Shell preview color</span><input type="color" value={configuration.color} onChange={(event) => onPatch({ color: event.target.value })} /><code>{configuration.color}</code></label>
               {configuration.patternMode === "sealed" && configuration.pattern !== "none" && (
-                <div className="callout magic"><Sparkles size={18} /><div><strong>Two-material 3MF</strong><span>The shell and buried artwork export as separate named objects. Assign translucent PETG to the shell and a compatible opaque PETG to the inlay.</span></div></div>
+                <div className="callout magic"><Sparkles size={18} /><div><strong>Buried optical pattern</strong><span>The Kumiko channel stays enclosed between two continuous skins and reads through translucent PETG. This export uses one translucent filament.</span></div></div>
+              )}
+              {configuration.patternMode === "inlay" && configuration.pattern !== "none" && (
+                <div className="callout magic"><Sparkles size={18} /><div><strong>Two-material 3MF</strong><span>The translucent shell and opaque Kumiko inlay export as separate aligned parts. Slot 1 is translucent PETG; slot 2 is opaque PETG.</span></div></div>
               )}
             </div>
           )}

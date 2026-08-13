@@ -5,7 +5,7 @@ import baseA1Mini from "../data/bambu-base-a1-mini-0.4.json";
 import baseP1S from "../data/bambu-base-p1s-0.4.json";
 import baseX1C from "../data/bambu-base-x1c-0.4.json";
 import type { IndexedMesh } from "./mesh";
-import { diagnoseMesh, ensureOutwardOrientation, meshBounds, seatOnPlate } from "./mesh";
+import { diagnoseMesh, ensureOutwardOrientation, meshBounds } from "./mesh";
 
 /**
  * Writes a genuine Bambu Studio project file.
@@ -243,6 +243,22 @@ function setPerSlot(config: ProjectConfig, key: string, value: string): void {
   // A key absent from the base config is not invented here.
 }
 
+/** Writes one value per loaded filament for multi-material projects. */
+function setFilamentSlots(
+  config: ProjectConfig,
+  key: string,
+  filaments: FilamentChoice[],
+  value: (filament: FilamentChoice) => string | undefined,
+): void {
+  const values = filaments.map(value);
+  if (values.some((entry) => entry === undefined)) return;
+  if (filaments.length === 1) {
+    setPerSlot(config, key, values[0]!);
+  } else if (config[key] !== undefined) {
+    config[key] = values as string[];
+  }
+}
+
 /**
  * Bambu stores bed temperature per plate type and reads the one named by
  * curr_bed_type. Set the active plate's temperature and leave the rest alone.
@@ -256,59 +272,53 @@ const PLATE_TEMP_KEYS: Record<string, string> = {
 };
 
 export function buildProjectConfig(
-  filament: FilamentChoice,
+  filament: FilamentChoice | FilamentChoice[],
   recipe: PrintRecipe,
   printer: PrinterId = DEFAULT_PRINTER,
 ): ProjectConfig {
   const config: ProjectConfig = JSON.parse(
     JSON.stringify(PRINTERS[printer].config),
   );
+  const filaments = Array.isArray(filament) ? filament : [filament];
+  const setAll = (key: string, value: string) =>
+    setFilamentSlots(config, key, filaments, () => value);
 
   // --- filament ---------------------------------------------------------
-  setPerSlot(config, "filament_type", filament.type);
-  setPerSlot(config, "filament_settings_id", filament.name);
+  setFilamentSlots(config, "filament_type", filaments, (entry) => entry.type);
+  setFilamentSlots(config, "filament_settings_id", filaments, (entry) => entry.name);
   // filament_ids takes the MATERIAL id (GFA00), never the preset id
   // (GFSA00_11). They are separate namespaces with no overlap across the whole
   // shipped profile library, so writing the preset id here labels the project
   // with a filament that does not exist.
-  if (filament.filamentId) setPerSlot(config, "filament_ids", filament.filamentId);
-  setPerSlot(config, "nozzle_temperature", String(filament.nozzleTemp));
-  setPerSlot(
+  setFilamentSlots(config, "filament_ids", filaments, (entry) => entry.filamentId ?? undefined);
+  setFilamentSlots(config, "nozzle_temperature", filaments, (entry) => String(entry.nozzleTemp));
+  setFilamentSlots(
     config,
     "nozzle_temperature_initial_layer",
-    String(filament.nozzleTempInitialLayer),
+    filaments,
+    (entry) => String(entry.nozzleTempInitialLayer),
   );
-  if (filament.flowRatio !== undefined)
-    setPerSlot(config, "filament_flow_ratio", String(filament.flowRatio));
-  if (filament.maxVolumetricSpeed !== undefined)
-    setPerSlot(
-      config,
-      "filament_max_volumetric_speed",
-      String(filament.maxVolumetricSpeed),
-    );
-  if (filament.retractionLength !== undefined)
-    setPerSlot(
-      config,
-      "filament_retraction_length",
-      String(filament.retractionLength),
-    );
-  if (filament.density !== undefined)
-    setPerSlot(config, "filament_density", String(filament.density));
-  if (filament.costPerKg !== undefined)
-    setPerSlot(config, "filament_cost", String(filament.costPerKg));
-  if (filament.slowDownMinSpeed !== undefined)
-    setPerSlot(config, "slow_down_min_speed", String(filament.slowDownMinSpeed));
-  if (filament.colour) {
-    setPerSlot(config, "filament_colour", filament.colour);
-    setPerSlot(config, "default_filament_colour", filament.colour);
-  }
+  setFilamentSlots(config, "filament_flow_ratio", filaments, (entry) =>
+    entry.flowRatio === undefined ? undefined : String(entry.flowRatio));
+  setFilamentSlots(config, "filament_max_volumetric_speed", filaments, (entry) =>
+    entry.maxVolumetricSpeed === undefined ? undefined : String(entry.maxVolumetricSpeed));
+  setFilamentSlots(config, "filament_retraction_length", filaments, (entry) =>
+    entry.retractionLength === undefined ? undefined : String(entry.retractionLength));
+  setFilamentSlots(config, "filament_density", filaments, (entry) =>
+    entry.density === undefined ? undefined : String(entry.density));
+  setFilamentSlots(config, "filament_cost", filaments, (entry) =>
+    entry.costPerKg === undefined ? undefined : String(entry.costPerKg));
+  setFilamentSlots(config, "slow_down_min_speed", filaments, (entry) =>
+    entry.slowDownMinSpeed === undefined ? undefined : String(entry.slowDownMinSpeed));
+  setFilamentSlots(config, "filament_colour", filaments, (entry) => entry.colour);
+  setFilamentSlots(config, "default_filament_colour", filaments, (entry) => entry.colour);
 
   // --- bed --------------------------------------------------------------
-  const plateKey = PLATE_TEMP_KEYS[filament.bedPlate];
+  const plateKey = PLATE_TEMP_KEYS[filaments[0].bedPlate];
   if (plateKey) {
-    setPerSlot(config, plateKey, String(filament.bedTemp));
-    setPerSlot(config, `${plateKey}_initial_layer`, String(filament.bedTemp));
-    config.curr_bed_type = filament.bedPlate;
+    setFilamentSlots(config, plateKey, filaments, (entry) => String(entry.bedTemp));
+    setFilamentSlots(config, `${plateKey}_initial_layer`, filaments, (entry) => String(entry.bedTemp));
+    config.curr_bed_type = filaments[0].bedPlate;
   }
 
   // --- process ----------------------------------------------------------
@@ -322,32 +332,60 @@ export function buildProjectConfig(
   config.bottom_shell_layers = String(recipe.bottomShellLayers);
   config.sparse_infill_density = recipe.sparseInfillDensity;
   config.sparse_infill_pattern = recipe.sparseInfillPattern;
-  setPerSlot(config, "outer_wall_speed", String(recipe.outerWallSpeed));
-  setPerSlot(config, "inner_wall_speed", String(recipe.innerWallSpeed));
-  setPerSlot(config, "sparse_infill_speed", String(recipe.sparseInfillSpeed));
-  setPerSlot(
-    config,
-    "internal_solid_infill_speed",
-    String(recipe.internalSolidInfillSpeed),
-  );
-  setPerSlot(config, "top_surface_speed", String(recipe.topSurfaceSpeed));
-  setPerSlot(config, "gap_infill_speed", String(recipe.gapInfillSpeed));
-  setPerSlot(config, "small_perimeter_speed", String(recipe.smallPerimeterSpeed));
-  setPerSlot(config, "initial_layer_speed", String(recipe.initialLayerSpeed));
+  setAll("outer_wall_speed", String(recipe.outerWallSpeed));
+  setAll("inner_wall_speed", String(recipe.innerWallSpeed));
+  setAll("sparse_infill_speed", String(recipe.sparseInfillSpeed));
+  setAll("internal_solid_infill_speed", String(recipe.internalSolidInfillSpeed));
+  setAll("top_surface_speed", String(recipe.topSurfaceSpeed));
+  setAll("gap_infill_speed", String(recipe.gapInfillSpeed));
+  setAll("small_perimeter_speed", String(recipe.smallPerimeterSpeed));
+  setAll("initial_layer_speed", String(recipe.initialLayerSpeed));
 
   // Cooling must come from the recipe, never inherited. The base project is the
   // translucent-glass one and runs its fans off by design.
-  setPerSlot(config, "fan_min_speed", String(recipe.fanMinSpeed));
-  setPerSlot(config, "fan_max_speed", String(recipe.fanMaxSpeed));
-  setPerSlot(config, "overhang_fan_speed", String(recipe.overhangFanSpeed));
-  setPerSlot(
-    config,
-    "close_fan_the_first_x_layers",
-    String(recipe.closeFanFirstLayers),
-  );
+  setAll("fan_min_speed", String(recipe.fanMinSpeed));
+  setAll("fan_max_speed", String(recipe.fanMaxSpeed));
+  setAll("overhang_fan_speed", String(recipe.overhangFanSpeed));
+  setAll("close_fan_the_first_x_layers", String(recipe.closeFanFirstLayers));
   config.enable_support = recipe.enableSupport ? "1" : "0";
   config.brim_type = recipe.brimType;
   config.print_settings_id = recipe.name;
+  if (filaments.length > 1) {
+    for (const [key, value] of Object.entries(config)) {
+      if (key.startsWith("filament_") && Array.isArray(value) && value.length === 1) {
+        config[key] = filaments.map(() => String(value[0]));
+      }
+    }
+    config.enable_prime_tower = "1";
+    // The P2S has one physical extruder fed by multiple AMS slots. Each
+    // filament therefore maps to extruder 1 / compatibility index 0.
+    config.filament_map = filaments.map(() => "1");
+    config.filament_extruder_compatibility = filaments.map(() => "0");
+    config.extruder_type = filaments.map(() => "Direct Drive");
+    config.nozzle_volume_type = filaments.map(() => "Standard");
+    // Keep the purge tower to the right of a centred phone case. The stock
+    // profile's saved tower coordinates overlap a 163 mm case on P1S-class
+    // plates, which makes Bambu reject an otherwise valid two-colour slice.
+    setAll("wipe_tower_x", "190");
+    setAll("wipe_tower_y", "110");
+    const filamentVariants = config.filament_extruder_variant;
+    if (Array.isArray(filamentVariants)) {
+      // A single-nozzle AMS project selects one physical nozzle variant per
+      // filament. Copying the full Standard/High Flow compatibility list for
+      // every slot leaves the initial tool unresolved (T65535) at slice time.
+      const selectedVariant = String(filamentVariants[0]);
+      config.filament_extruder_variant = filaments.map(() => selectedVariant);
+      config.filament_self_index = filaments.map((_, index) => String(index + 1));
+    }
+    // Bambu requires an N x N purge matrix and N-entry loading vector. The
+    // bundled single-material base carries a four-slot matrix, which must be
+    // resized when this project exposes exactly two slots.
+    config.flush_volumes_matrix = filaments.flatMap((_, from) =>
+      filaments.map((__, to) => (from === to ? "0" : "280")),
+    );
+    // Bambu stores loading and unloading volumes as a pair per filament.
+    config.flush_volumes_vector = filaments.flatMap(() => ["140", "140"]);
+  }
 
   return config;
 }
@@ -392,33 +430,37 @@ function seededUuid(seed: string, salt: number): string {
   ].join("-");
 }
 
-function meshToObjectModel(mesh: IndexedMesh, uuid: string): string {
-  const { positions, indices } = mesh;
+function meshesToObjectModel(
+  parts: Array<{ mesh: IndexedMesh; uuid: string }>,
+): string {
+  const objects = parts.map(({ mesh, uuid }, partIndex) => {
+    const { positions, indices } = mesh;
+    const vertices: string[] = [];
+    for (let index = 0; index < positions.length; index += 3) {
+      vertices.push(
+        `<vertex x="${+positions[index].toFixed(6)}" y="${+positions[index + 1].toFixed(6)}" z="${+positions[index + 2].toFixed(6)}"/>`,
+      );
+    }
 
-  const vertices: string[] = [];
-  for (let index = 0; index < positions.length; index += 3) {
-    vertices.push(
-      `<vertex x="${+positions[index].toFixed(6)}" y="${+positions[index + 1].toFixed(6)}" z="${+positions[index + 2].toFixed(6)}"/>`,
-    );
-  }
-
-  const triangles: string[] = [];
-  for (let index = 0; index < indices.length; index += 3) {
-    triangles.push(
-      `<triangle v1="${indices[index]}" v2="${indices[index + 1]}" v3="${indices[index + 2]}"/>`,
-    );
-  }
+    const triangles: string[] = [];
+    for (let index = 0; index < indices.length; index += 3) {
+      triangles.push(
+        `<triangle v1="${indices[index]}" v2="${indices[index + 1]}" v3="${indices[index + 2]}"/>`,
+      );
+    }
+    return `  <object id="${partIndex + 1}" p:UUID="${uuid}" type="model">
+   <mesh>
+    <vertices>${vertices.join("")}</vertices>
+    <triangles>${triangles.join("")}</triangles>
+   </mesh>
+  </object>`;
+  });
 
   return `<?xml version='1.0' encoding='utf-8'?>
 <model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" unit="millimeter" xml:lang="en-US" requiredextensions="p">
  <metadata name="BambuStudio:3mfVersion">1</metadata>
  <resources>
-  <object id="1" p:UUID="${uuid}" type="model">
-   <mesh>
-    <vertices>${vertices.join("")}</vertices>
-    <triangles>${triangles.join("")}</triangles>
-   </mesh>
-  </object>
+${objects.join("\n")}
  </resources>
  <build/>
 </model>
@@ -444,6 +486,51 @@ export interface BambuProjectResult {
   bounds: ReturnType<typeof meshBounds>;
 }
 
+export interface BambuProjectPart {
+  mesh: IndexedMesh;
+  name: string;
+  /** One-based filament slot, matching Bambu Studio's UI. */
+  filamentIndex: number;
+}
+
+/** Applies one shared seating transform so assembled volumes stay aligned. */
+function seatAssembly(parts: BambuProjectPart[]): BambuProjectPart[] {
+  const bounds = parts.map((part) => meshBounds(part.mesh));
+  const minX = Math.min(...bounds.map((entry) => entry.min[0]));
+  const minY = Math.min(...bounds.map((entry) => entry.min[1]));
+  const minZ = Math.min(...bounds.map((entry) => entry.min[2]));
+  const maxX = Math.max(...bounds.map((entry) => entry.max[0]));
+  const maxY = Math.max(...bounds.map((entry) => entry.max[1]));
+  const shiftX = -(minX + maxX) / 2;
+  const shiftY = -(minY + maxY) / 2;
+  const shiftZ = -minZ;
+
+  return parts.map((part) => {
+    const positions = Float64Array.from(part.mesh.positions);
+    for (let index = 0; index < positions.length; index += 3) {
+      positions[index] += shiftX;
+      positions[index + 1] += shiftY;
+      positions[index + 2] += shiftZ;
+    }
+    return { ...part, mesh: { ...part.mesh, positions } };
+  });
+}
+
+function assemblyBounds(parts: BambuProjectPart[]): ReturnType<typeof meshBounds> {
+  const bounds = parts.map((part) => meshBounds(part.mesh));
+  const min: [number, number, number] = [0, 1, 2].map((axis) =>
+    Math.min(...bounds.map((entry) => entry.min[axis])),
+  ) as [number, number, number];
+  const max: [number, number, number] = [0, 1, 2].map((axis) =>
+    Math.max(...bounds.map((entry) => entry.max[axis])),
+  ) as [number, number, number];
+  return {
+    min,
+    max,
+    size: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+  };
+}
+
 /**
  * Serialises a case into a Bambu Studio project.
  *
@@ -453,6 +540,10 @@ export interface BambuProjectResult {
 export function buildBambuProject(options: {
   mesh: IndexedMesh;
   filament: FilamentChoice;
+  /** Additional slots for a multi-material assembled object. */
+  filaments?: FilamentChoice[];
+  /** Aligned volumes. Omit for a normal single-mesh project. */
+  parts?: BambuProjectPart[];
   recipe: PrintRecipe;
   metadata: ProjectMetadata;
   /** Which printer this project is for. Defaults to the P2S. */
@@ -460,37 +551,68 @@ export function buildBambuProject(options: {
   /** Skip the watertight gate. Only for inspecting a known-bad mesh. */
   allowNonManifold?: boolean;
 }): BambuProjectResult {
-  const seated = seatOnPlate(ensureOutwardOrientation(options.mesh));
-  const diagnostics = diagnoseMesh(seated);
+  const sourceParts = options.parts?.length
+    ? options.parts
+    : [{ mesh: options.mesh, name: options.metadata.title, filamentIndex: 1 }];
+  const filaments = options.filaments?.length
+    ? options.filaments
+    : [options.filament];
+  const seatedParts = seatAssembly(
+    sourceParts.map((part) => ({
+      ...part,
+      mesh: ensureOutwardOrientation(part.mesh),
+    })),
+  );
+  const diagnosticsByPart = seatedParts.map((part) => diagnoseMesh(part.mesh));
+  const diagnostics = diagnosticsByPart[0];
 
   if (!options.allowNonManifold) {
-    if (!diagnostics.isEdgeManifold) {
-      throw new Error(
-        `Mesh is not watertight: ${diagnostics.boundaryEdges} boundary edges, ` +
-          `${diagnostics.nonManifoldEdges} non-manifold edges. Bambu Studio ` +
-          `cannot slice this reliably, so it was not exported.`,
-      );
-    }
-    if (!diagnostics.isConsistentlyOriented) {
-      throw new Error(
-        "Mesh has inconsistent triangle winding, so inside and outside are " +
-          "ambiguous. Refusing to export.",
-      );
+    for (let index = 0; index < seatedParts.length; index += 1) {
+      const part = seatedParts[index];
+      const partDiagnostics = diagnosticsByPart[index];
+      if (!partDiagnostics.isEdgeManifold) {
+        throw new Error(
+          `${part.name} is not watertight: ${partDiagnostics.boundaryEdges} boundary edges, ` +
+            `${partDiagnostics.nonManifoldEdges} non-manifold edges. Bambu Studio ` +
+            `cannot slice this reliably, so it was not exported.`,
+        );
+      }
+      if (!partDiagnostics.isConsistentlyOriented) {
+        throw new Error(
+          `${part.name} has inconsistent triangle winding, so inside and outside ` +
+            "are ambiguous. Refusing to export.",
+        );
+      }
+      if (part.filamentIndex < 1 || part.filamentIndex > filaments.length) {
+        throw new Error(
+          `${part.name} targets missing filament slot ${part.filamentIndex}.`,
+        );
+      }
     }
   }
 
   const printer = options.printer ?? DEFAULT_PRINTER;
-  const config = buildProjectConfig(options.filament, options.recipe, printer);
+  const config = buildProjectConfig(filaments, options.recipe, printer);
   const centre = plateCentre(config);
-  const bounds = meshBounds(seated);
-  const seed = `${options.metadata.title}|${options.filament.name}|${options.recipe.id}|${printer}`;
+  const bounds = assemblyBounds(seatedParts);
+  const seed = `${options.metadata.title}|${filaments.map((entry) => entry.name).join("|")}|${options.recipe.id}|${printer}`;
 
-  const objectUuid = seededUuid(seed, 1);
-  const componentUuid = seededUuid(seed, 2);
+  const objectUuids = seatedParts.map((_, index) => seededUuid(seed, 10 + index));
+  const componentUuids = seatedParts.map((_, index) => seededUuid(seed, 20 + index));
   const wrapperUuid = seededUuid(seed, 3);
   const buildUuid = seededUuid(seed, 4);
   const itemUuid = seededUuid(seed, 5);
-  const partUuid = seededUuid(seed, 6);
+  const partUuids = seatedParts.map((_, index) => seededUuid(seed, 30 + index));
+  const wrapperId = seatedParts.length + 1;
+  // Every assembled volume must be a distinct object resource in the same
+  // component model. Separate component files with an object id of 1 look
+  // equivalent but Bambu silently collapses their part-level filament mapping.
+  const componentsXml = seatedParts
+    .map(
+      (_, index) =>
+        `    <component p:path="/3D/Objects/object_1.model" objectid="${index + 1}" p:UUID="${componentUuids[index]}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>`,
+    )
+    .join("\n");
 
   const modelXml = `<?xml version='1.0' encoding='utf-8'?>
 <model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" unit="millimeter" xml:lang="en-US" requiredextensions="p">
@@ -504,44 +626,57 @@ export function buildBambuProject(options: {
  <metadata name="ProfileTitle">${escapeXml(options.recipe.name)}</metadata>
  <metadata name="Title">${escapeXml(options.metadata.title)}</metadata>
  <resources>
-  <object id="2" p:UUID="${wrapperUuid}" type="model">
+  <object id="${wrapperId}" p:UUID="${wrapperUuid}" type="model">
    <components>
-    <component p:path="/3D/Objects/object_1.model" objectid="1" p:UUID="${componentUuid}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>
+${componentsXml}
    </components>
   </object>
  </resources>
  <build p:UUID="${buildUuid}">
-  <item objectid="2" p:UUID="${itemUuid}" transform="1 0 0 0 1 0 0 0 1 ${centre.x} ${centre.y} 0" printable="1"/>
+  <item objectid="${wrapperId}" p:UUID="${itemUuid}" transform="1 0 0 0 1 0 0 0 1 ${centre.x} ${centre.y} 0" printable="1"/>
  </build>
 </model>
 `;
 
-  const modelSettingsXml = `<?xml version='1.0' encoding='utf-8'?>
-<config>
-  <object id="2">
-    <metadata key="name" value="${escapeXml(options.metadata.title)}"/>
-    <metadata key="extruder" value="1"/>
-    <metadata face_count="${seated.triangleCount}"/>
-    <part id="1" subtype="normal_part" uuid="${partUuid}">
-      <metadata key="name" value="${escapeXml(options.metadata.title)}"/>
+  const partsXml = seatedParts
+    .map(
+      (part, index) => `    <part id="${index + 1}" subtype="normal_part" uuid="${partUuids[index]}">
+      <metadata key="name" value="${escapeXml(part.name)}"/>
       <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
       <metadata key="source_file" value="${escapeXml(options.metadata.title)}.3mf"/>
       <metadata key="source_object_id" value="0"/>
-      <metadata key="source_volume_id" value="0"/>
+      <metadata key="source_volume_id" value="${index}"/>
       <metadata key="source_offset_x" value="0"/>
       <metadata key="source_offset_y" value="0"/>
       <metadata key="source_offset_z" value="0"/>
-      <mesh_stat face_count="${seated.triangleCount}" edges_fixed="0" degenerate_facets="${diagnostics.degenerateTriangles}" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
-    </part>
+      <metadata key="extruder" value="${part.filamentIndex}"/>
+      <mesh_stat face_count="${part.mesh.triangleCount}" edges_fixed="0" degenerate_facets="${diagnosticsByPart[index].degenerateTriangles}" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
+    </part>`,
+    )
+    .join("\n");
+  const totalTriangles = seatedParts.reduce(
+    (sum, part) => sum + part.mesh.triangleCount,
+    0,
+  );
+
+  const modelSettingsXml = `<?xml version='1.0' encoding='utf-8'?>
+<config>
+  <object id="${wrapperId}">
+    <metadata key="name" value="${escapeXml(options.metadata.title)}"/>
+    <metadata key="extruder" value="1"/>
+    <metadata face_count="${totalTriangles}"/>
+${partsXml}
   </object>
   <plate>
     <metadata key="plater_id" value="1"/>
     <metadata key="plater_name" value="${escapeXml(options.metadata.plateName)}"/>
     <metadata key="locked" value="false"/>
-    <metadata key="filament_map_mode" value="Auto For Flush"/>
+    <metadata key="filament_map_mode" value="Manual"/>
+    <metadata key="filament_maps" value="${filaments.map((_, index) => index + 1).join(" ")}"/>
+    <metadata key="filament_volume_maps" value="${filaments.map(() => 1).join(" ")}"/>
     <metadata key="gcode_file" value=""/>
     <model_instance>
-      <metadata key="object_id" value="2"/>
+      <metadata key="object_id" value="${wrapperId}"/>
       <metadata key="instance_id" value="0"/>
       <metadata key="identify_id" value="1"/>
     </model_instance>
@@ -582,11 +717,15 @@ export function buildBambuProject(options: {
     "_rels/.rels": strToU8(rootRels),
     "3D/3dmodel.model": strToU8(modelXml),
     "3D/_rels/3dmodel.model.rels": strToU8(modelRels),
-    "3D/Objects/object_1.model": strToU8(meshToObjectModel(seated, objectUuid)),
     "Metadata/project_settings.config": strToU8(JSON.stringify(config, null, 4)),
     "Metadata/model_settings.config": strToU8(modelSettingsXml),
     "Metadata/custom_gcode_per_layer.xml": strToU8(customGcode),
   };
+  files["3D/Objects/object_1.model"] = strToU8(
+    meshesToObjectModel(
+      seatedParts.map((part, index) => ({ mesh: part.mesh, uuid: objectUuids[index] })),
+    ),
+  );
 
   return { bytes: zipSync(files, { level: 6 }), diagnostics, bounds };
 }

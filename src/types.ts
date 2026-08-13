@@ -118,7 +118,7 @@ export type ArchitectureId =
  */
 export type PatternId = "none" | "asanoha" | "sakura";
 
-export type PatternMode = "engraved" | "sealed" | "vented";
+export type PatternMode = "engraved" | "sealed" | "inlay" | "vented";
 
 export interface CaseConfiguration {
   phoneId: string;

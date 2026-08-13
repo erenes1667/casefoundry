@@ -658,6 +658,16 @@ ${componentsXml}
     (sum, part) => sum + part.mesh.triangleCount,
     0,
   );
+  const plateFilamentMaps = Array.isArray(config.filament_map)
+    ? config.filament_map.slice(0, filaments.length).map(String)
+    : filaments.map(() => "1");
+  const plateVolumeMaps = Array.isArray(config.filament_volume_map)
+    ? config.filament_volume_map.slice(0, filaments.length).map(String)
+    : filaments.map(() => "0");
+  const plateMapMode =
+    typeof config.filament_map_mode === "string"
+      ? config.filament_map_mode
+      : "Auto For Flush";
 
   const modelSettingsXml = `<?xml version='1.0' encoding='utf-8'?>
 <config>
@@ -671,9 +681,9 @@ ${partsXml}
     <metadata key="plater_id" value="1"/>
     <metadata key="plater_name" value="${escapeXml(options.metadata.plateName)}"/>
     <metadata key="locked" value="false"/>
-    <metadata key="filament_map_mode" value="Manual"/>
-    <metadata key="filament_maps" value="${filaments.map((_, index) => index + 1).join(" ")}"/>
-    <metadata key="filament_volume_maps" value="${filaments.map(() => 1).join(" ")}"/>
+    <metadata key="filament_map_mode" value="${escapeXml(plateMapMode)}"/>
+    <metadata key="filament_maps" value="${plateFilamentMaps.join(" ")}"/>
+    <metadata key="filament_volume_maps" value="${plateVolumeMaps.join(" ")}"/>
     <metadata key="gcode_file" value=""/>
     <model_instance>
       <metadata key="object_id" value="${wrapperId}"/>

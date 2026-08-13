@@ -8,8 +8,8 @@ This release is intentionally honest about certainty. The bundled S24+, S23 FE, 
 
 Download the latest build from [GitHub Releases](https://github.com/erenes1667/casefoundry/releases/latest), then choose the archive that matches your Mac:
 
-- `CaseFoundry-2026.8.5-arm64.zip`: Apple Silicon, including M1, M2, M3, M4, and later Apple chips.
-- `CaseFoundry-2026.8.5-x64.zip`: Intel Macs.
+- `CaseFoundry-2026.8.6-arm64.zip`: Apple Silicon, including M1, M2, M3, M4, and later Apple chips.
+- `CaseFoundry-2026.8.6-x64.zip`: Intel Macs.
 
 Unzip the archive, move `CaseFoundry.app` to Applications, then right-click it and choose **Open** the first time.
 

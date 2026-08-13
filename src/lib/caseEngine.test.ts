@@ -334,6 +334,9 @@ describe("artwork actually reaches the solid", () => {
     expect(settings.filament_settings_id).toHaveLength(2);
     expect(settings.filament_colour).toEqual(["#d9ffff", "#202020"]);
     expect(settings.enable_prime_tower).toBe("1");
+    expect(modelSettings).toContain('key="filament_map_mode" value="Auto For Flush"');
+    expect(modelSettings).toContain('key="filament_maps" value="1 1"');
+    expect(modelSettings).toContain('key="filament_volume_maps" value="0 0"');
     expect(modelSettings).toContain('name" value="Case shell"');
     expect(modelSettings).toContain('name" value="Opaque Kumiko inlay"');
     expect(modelSettings).toContain('key="extruder" value="2"');

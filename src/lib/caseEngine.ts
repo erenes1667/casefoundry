@@ -1,8 +1,15 @@
-import { architectures, materials, printProfiles } from "../data/catalog";
+import {
+  DEFAULT_MAGSAFE_INSERT,
+  architectures,
+  materials,
+  patterns,
+  printProfiles,
+} from "../data/catalog";
 import { defaultFilamentFor } from "../data/filaments";
 import type {
   CaseConfiguration,
   GeneratedCase,
+  MagSafeInsertConfiguration,
   PhoneRecord,
   ValidationIssue,
   ValidationReport,
@@ -10,9 +17,11 @@ import type {
 import { clamp, round, slugify } from "./format";
 import {
   USB_C_CABLE_CLEARANCE_MM,
+  MIN_MAGSAFE_INNER_COVER_MM,
   buildCase,
   caseDimensions,
   isUsbCPort,
+  resolveMagSafeInsert,
   sealedPatternLayers,
   type CaseSpec,
 } from "./caseGeometry";
@@ -35,6 +44,13 @@ export function printerFor(configuration: CaseConfiguration): PrinterId {
 }
 
 type CasePart = GeneratedCase["parts"][number];
+
+/** Fills fields missing from projects saved before embedded inserts existed. */
+function normalizedMagSafe(
+  value: Partial<MagSafeInsertConfiguration> | undefined,
+): MagSafeInsertConfiguration {
+  return { ...DEFAULT_MAGSAFE_INSERT, ...value };
+}
 
 /**
  * Must be awaited once before any geometry call. Loads the Manifold WASM
@@ -61,6 +77,7 @@ export function specFromConfiguration(
     lipOverhang: Math.min(1.2, configuration.lipHeight),
     cameraMargin: configuration.cameraMargin,
     layerHeight: recipe.layerHeight,
+    initialLayerHeight: recipe.initialLayerHeight,
     openTop: configuration.topOpening,
     openBottom: configuration.bottomOpening,
     // Only a flexible material can carry a pressable pad. tuneConfiguration
@@ -73,14 +90,7 @@ export function specFromConfiguration(
     // Rigid materials cannot flex over a continuous lip, so they keep it only
     // at the corners. TPU stretches and can take a full lip.
     cornerLipOnly: !material.flexible,
-    pattern:
-      configuration.pattern === "none"
-        ? "none"
-        : configuration.pattern === "sakura"
-          ? "sakura"
-          : configuration.pattern === "asanoha"
-            ? "asanoha"
-            : "kumiko-hex",
+    pattern: configuration.pattern,
     patternMode:
       configuration.patternMode === "vented"
         ? "through"
@@ -93,6 +103,7 @@ export function specFromConfiguration(
     // Strokes below roughly two extrusion widths print as broken hairlines.
     patternStroke: Math.max(configuration.nozzle * 2, 0.8),
     patternScale: configuration.patternScale,
+    magsafe: normalizedMagSafe(configuration.magsafe),
   };
 }
 
@@ -108,6 +119,14 @@ export function recipeForConfiguration(
   return RECIPES["solid-engraved"];
 }
 
+/** Minimum backplate that keeps an enabled insert enclosed on both faces. */
+export function requiredBackThicknessForMagSafe(
+  configuration: CaseConfiguration,
+): number | null {
+  return resolveMagSafeInsert(specFromConfiguration(configuration))
+    ?.requiredBackThickness ?? null;
+}
+
 function makeReport(
   phone: PhoneRecord,
   config: CaseConfiguration,
@@ -116,6 +135,10 @@ function makeReport(
 ): ValidationReport {
   const material = materials[config.material];
   const architecture = architectures[config.architecture];
+  const spec = specFromConfiguration(config);
+  const dimensions = caseDimensions(phone, spec);
+  const magsafe = normalizedMagSafe(config.magsafe);
+  const magsafeInsert = resolveMagSafeInsert(spec);
   const issues: ValidationIssue[] = [];
   const add = (issue: ValidationIssue) => issues.push(issue);
   // Must mirror the clamping in caseGeometry.buildCase exactly. Reporting a
@@ -201,6 +224,126 @@ function makeReport(
             : "Motifs use filled, reinforced geometry instead of loose hairline islands.",
       field: "patternMode",
     });
+  }
+
+  if (magsafe.enabled && magsafeInsert) {
+    const insertWall = (magsafe.outerDiameter - magsafe.innerDiameter) / 2;
+    const phoneSideCover = config.backThickness - magsafeInsert.cavityTop;
+    minimumSkin = Math.min(
+      minimumSkin,
+      magsafeInsert.cavityBottom,
+      phoneSideCover,
+    );
+
+    if (
+      magsafe.outerDiameter <= magsafe.innerDiameter ||
+      insertWall < Math.max(config.nozzle, 0.4)
+    ) {
+      add({
+        id: "magsafe-ring-invalid",
+        severity: "error",
+        title: "MagSafe insert dimensions conflict",
+        detail:
+          "The outside diameter must leave a real annular insert wider than one nozzle line.",
+        field: "magsafe",
+      });
+    }
+
+    const halfOuter = magsafeInsert.outerDiameter / 2;
+    const widthLimit = dimensions.innerWidth / 2 - 2;
+    const lengthLimit = dimensions.innerLength / 2 - 2;
+    if (
+      halfOuter > widthLimit ||
+      Math.abs(magsafeInsert.centerY) + halfOuter > lengthLimit
+    ) {
+      add({
+        id: "magsafe-outside-back",
+        severity: "error",
+        title: "MagSafe pocket leaves the safe back area",
+        detail:
+          "Reduce the ring diameter or vertical offset so the complete pocket stays inside the phone cavity outline.",
+        field: "magsafe",
+      });
+    }
+
+    const innerRadius = magsafeInsert.innerDiameter / 2;
+    const rearCutoutOverlap = phone.features.some((feature) => {
+      if (
+        feature.side !== "back" ||
+        !["camera", "cameraIsland", "flash"].includes(feature.kind)
+      ) {
+        return false;
+      }
+      const featureRadius =
+        feature.shape === "circle"
+          ? Math.max(feature.size.x, feature.size.y) / 2 + config.cameraMargin
+          : Math.hypot(
+              feature.size.x / 2 + config.cameraMargin,
+              feature.size.y / 2 + config.cameraMargin,
+            );
+      const centreDistance = Math.hypot(
+        feature.center.x,
+        feature.center.y - magsafeInsert.centerY,
+      );
+      return (
+        centreDistance - featureRadius < halfOuter &&
+        centreDistance + featureRadius > innerRadius
+      );
+    });
+    if (rearCutoutOverlap) {
+      add({
+        id: "magsafe-camera-overlap",
+        severity: "error",
+        title: "MagSafe pocket overlaps a camera cutout",
+        detail:
+          "Change the ring diameter or vertical offset so the insert pocket stays clear of every rear-camera opening.",
+        field: "magsafe",
+      });
+    }
+
+    if (magsafeInsert.cavityBottom < 0.4) {
+      add({
+        id: "magsafe-cover-thin",
+        severity: "error",
+        title: "MagSafe exterior cover is too thin",
+        detail: `${magsafeInsert.cavityBottom.toFixed(2)} mm remains over the insert. Keep at least 0.40 mm.`,
+        field: "magsafe",
+      });
+    }
+
+    if (config.backThickness + 1e-6 < magsafeInsert.requiredBackThickness) {
+      add({
+        id: "magsafe-back-thin",
+        severity: "error",
+        title: "Backplate cannot seal the MagSafe insert",
+        detail:
+          `${magsafeInsert.requiredBackThickness.toFixed(2)} mm is required for the ` +
+          `${magsafe.thickness.toFixed(2)} mm insert and ` +
+          `${MIN_MAGSAFE_INNER_COVER_MM.toFixed(2)} mm phone-side cover.`,
+        field: "backThickness",
+      });
+    } else {
+      add({
+        id: "magsafe-pause-ready",
+        severity: "pass",
+        title: "MagSafe insert pause is embedded",
+        detail:
+          `Bambu Studio pauses before the sealing layer at Z ${magsafeInsert.pausePrintZ.toFixed(2)} mm. ` +
+          "Seat the ring flush with correct polarity before resuming.",
+        field: "magsafe",
+      });
+    }
+
+    if (!phone.features.some((feature) => feature.kind === "coil")) {
+      add({
+        id: "magsafe-coil-unverified",
+        severity: "warning",
+        title: "Charging-coil alignment is not measured",
+        detail:
+          "The ring defaults to the phone centre. Use the vertical offset after measuring the handset's wireless-charging coil.",
+        field: "magsafe",
+      });
+    }
   }
 
   if (!architecture.recommended.includes(config.material)) {
@@ -349,7 +492,6 @@ function makeReport(
     }
   }
 
-  const dimensions = caseDimensions(phone, specFromConfiguration(config));
   const volumeMm3 = mesh
     ? Math.abs(diagnoseMesh(mesh).signedVolumeMm3)
     : dimensions.outerWidth * dimensions.outerLength * config.backThickness;
@@ -411,8 +553,9 @@ export function tuneConfiguration(
       profile.material === configuration.material &&
       profile.nozzle === configuration.nozzle,
   );
-  return {
+  const tuned: CaseConfiguration = {
     ...configuration,
+    magsafe: normalizedMagSafe(configuration.magsafe),
     phoneId: phone.id,
     architecture,
     // Use the same measured fit rule as the slicer gate and 3MF exporter.
@@ -436,6 +579,14 @@ export function tuneConfiguration(
     ),
     printerProfile: matchingProfile?.id ?? configuration.printerProfile,
   };
+  const insert = resolveMagSafeInsert(specFromConfiguration(tuned));
+  if (insert) {
+    tuned.backThickness = Math.max(
+      tuned.backThickness,
+      insert.requiredBackThickness,
+    );
+  }
+  return tuned;
 }
 
 export function generateCase(
@@ -462,7 +613,7 @@ export function generateCase(
     built.inlay.delete();
     parts.push({
       id: "inlay",
-      name: "Opaque Kumiko inlay",
+      name: `Opaque ${patterns[configuration.pattern].name} inlay`,
       role: "inlay",
       geometry: inlayMesh,
       color: "#202020",
@@ -474,6 +625,7 @@ export function generateCase(
     parts,
     report,
     name: `${phone.brand} ${phone.model} ${configuration.pattern === "none" ? "Plain" : configuration.pattern}`,
+    printPause: built.printPause,
   };
 }
 
@@ -489,7 +641,11 @@ export function generateFitCoupon(
   configuration: CaseConfiguration,
 ): GeneratedCase {
   const { Manifold } = csg();
-  const config = tuneConfiguration(phone, { ...configuration, pattern: "none" });
+  const config = tuneConfiguration(phone, {
+    ...configuration,
+    pattern: "none",
+    magsafe: { ...normalizedMagSafe(configuration.magsafe), enabled: false },
+  });
   const spec = specFromConfiguration(config);
   const built = buildCase(phone, spec);
   const dimensions = built.dimensions;
@@ -650,6 +806,7 @@ export function serializeCase3mf(
       : undefined,
     recipe: options.recipe,
     printer: options.printer,
+    pause: generated.printPause,
     metadata: {
       title: generated.name,
       plateName: generated.name,
@@ -667,7 +824,7 @@ export function printableFileStem(
   config: CaseConfiguration,
 ): string {
   return slugify(
-    `CaseFoundry-${phone.brand}-${phone.model}-${config.architecture}-${config.pattern}-${config.material}`,
+    `CaseFoundry-${phone.brand}-${phone.model}-${config.architecture}-${config.pattern}-${config.material}${normalizedMagSafe(config.magsafe).enabled ? "-magsafe-insert" : ""}`,
   );
 }
 

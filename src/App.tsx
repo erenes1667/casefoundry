@@ -20,6 +20,7 @@ import {
   Layers3,
   LayoutDashboard,
   LoaderCircle,
+  Magnet,
   Menu,
   PackageCheck,
   Palette,
@@ -54,6 +55,7 @@ import {
   generateFitCoupon,
   geometryBounds,
   printableFileStem,
+  requiredBackThicknessForMagSafe,
   ensureEngineReady,
   printerFor,
   recipeForConfiguration,
@@ -284,12 +286,94 @@ function PatternSwatch({ pattern }: { pattern: PatternId }) {
       </div>
     );
   }
-  if (pattern === "circuit") {
+  if (pattern === "kikko") {
     return (
       <div className="pattern-swatch">
         <svg viewBox="0 0 120 80">
-          <path d="M8 18 H48 V31 H82 V16 H110 M8 42 H32 V58 H74 V45 H110 M22 72 V66 H94 V59" />
-          <g>{[[8,18],[110,16],[8,42],[110,45],[22,72],[94,59]].map(([x,y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="3" />)}</g>
+          <path d="M3 20 15 13 27 20 27 34 15 41 3 34Z M27 20 39 13 51 20 51 34 39 41 27 34Z M51 20 63 13 75 20 75 34 63 41 51 34Z M75 20 87 13 99 20 99 34 87 41 75 34Z M15 41 27 34 39 41 39 55 27 62 15 55Z M39 41 51 34 63 41 63 55 51 62 39 55Z M63 41 75 34 87 41 87 55 75 62 63 55Z M87 41 99 34 111 41 111 55 99 62 87 55Z" />
+        </svg>
+      </div>
+    );
+  }
+  if (pattern === "shippo") {
+    return (
+      <div className="pattern-swatch">
+        <svg viewBox="0 0 120 80">
+          {[15, 40, 65, 90, 115].flatMap((cx) =>
+            [15, 40, 65].map((cy) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="18" />),
+          )}
+        </svg>
+      </div>
+    );
+  }
+  if (pattern === "seigaiha") {
+    return (
+      <div className="pattern-swatch">
+        <svg viewBox="0 0 120 80">
+          {[0, 30, 60, 90, 120].flatMap((cx, column) =>
+            [26, 52, 78].flatMap((cy, row) =>
+              [18, 12, 6].map((radius) => (
+                <path
+                  key={`${column}-${row}-${radius}`}
+                  d={`M${cx - radius} ${cy} A${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
+                />
+              )),
+            ),
+          )}
+        </svg>
+      </div>
+    );
+  }
+  if (pattern === "goma") {
+    return (
+      <div className="pattern-swatch">
+        <svg viewBox="0 0 120 80">
+          <path d="M-8 56 38 18 M-2 64 44 26 M6 72 52 34 M28 18 78 62 M36 10 86 54 M44 2 94 46 M68 58 116 20 M76 66 124 28 M84 74 132 36" />
+        </svg>
+      </div>
+    );
+  }
+  if (pattern === "shokko") {
+    return (
+      <div className="pattern-swatch">
+        <svg viewBox="0 0 120 80">
+          <path d="M4 18H22V36H4ZM22 27H40M40 18H58V36H40ZM58 27H76M76 18H94V36H76ZM13 36V54M4 54H22V72H4ZM49 36V54M40 54H58V72H40ZM85 36V54M76 54H94V72H76Z" />
+        </svg>
+      </div>
+    );
+  }
+  if (pattern === "saya-gata") {
+    return (
+      <div className="pattern-swatch">
+        <svg viewBox="0 0 120 80">
+          <path d="M0 15H20V35H40V55H60V75H80 M10 0V25H30V45H50V65H70V80 M40 15H60V35H80V55H100V75H120 M50 0V25H70V45H90V65H110V80" />
+        </svg>
+      </div>
+    );
+  }
+  if (
+    pattern === "izutsu-wari-bishi" ||
+    pattern === "wari-bishi" ||
+    pattern === "sanjyu-bishi"
+  ) {
+    const rings =
+      pattern === "sanjyu-bishi"
+        ? [1, 0.7, 0.4]
+        : pattern === "izutsu-wari-bishi"
+          ? [1, 0.58]
+          : [1];
+    return (
+      <div className="pattern-swatch">
+        <svg viewBox="0 0 120 80">
+          {[20, 60, 100].flatMap((cx) =>
+            rings.map((ring) => (
+              <path
+                key={`${cx}-${ring}`}
+                d={`M${cx} ${40 - 27 * ring} L${cx + 19 * ring} 40 L${cx} ${40 + 27 * ring} L${cx - 19 * ring} 40 Z`}
+              />
+            )),
+          )}
+          {pattern !== "sanjyu-bishi" && <path d="M1 40H119 M20 13V67 M60 13V67 M100 13V67" />}
         </svg>
       </div>
     );
@@ -297,9 +381,10 @@ function PatternSwatch({ pattern }: { pattern: PatternId }) {
   return (
     <div className="pattern-swatch">
       <svg viewBox="0 0 120 80">
-        <path d="M9 39 C12 11 45 6 72 13 C103 20 115 43 102 61 C89 79 48 76 24 64 C12 58 7 50 9 39Z" />
-        <path d="M20 40 C23 21 47 16 69 21 C91 26 103 41 93 55 C82 68 52 66 34 58 C24 53 18 47 20 40Z" />
-        <path d="M34 41 C37 29 52 27 66 30 C80 33 87 42 81 50 C74 58 56 57 45 52 C38 49 33 45 34 41Z" />
+        {[8, 18, 28, 38, 48, 58, 68, 78, 88, 98, 108, 118].map((x) => (
+          <line key={x} x1={x} y1="0" x2={x} y2="80" />
+        ))}
+        <path d="M0 29H120 M0 35H120 M0 41H120 M0 58H120 M0 64H120 M0 70H120" />
       </svg>
     </div>
   );
@@ -501,6 +586,15 @@ export function App() {
         kind: "error",
         title: "Two-material artwork requires 3MF",
         detail: "Use Export 3MF so the translucent shell and opaque inlay keep their separate filament assignments.",
+      });
+      return;
+    }
+    if (format === "stl" && built.printPause) {
+      notify({
+        kind: "error",
+        title: "Embedded MagSafe insert requires 3MF",
+        detail:
+          "STL cannot carry the required mid-print pause. Export 3MF so Bambu Studio pauses before sealing the ring.",
       });
       return;
     }
@@ -1002,6 +1096,19 @@ function StudioView({
 }) {
   const [controlTab, setControlTab] = useState<"structure" | "art" | "print">("structure");
   const metricReport = !stale && generated ? generated.report : validation;
+  const magsafe = configuration.magsafe ?? defaultConfiguration(phone.id).magsafe;
+  const patchMagSafe = (patch: Partial<typeof magsafe>) => {
+    const nextMagSafe = { ...magsafe, ...patch };
+    const nextConfiguration = { ...configuration, magsafe: nextMagSafe };
+    const requiredBack = requiredBackThicknessForMagSafe(nextConfiguration);
+    onPatch({
+      magsafe: nextMagSafe,
+      backThickness:
+        requiredBack === null
+          ? configuration.backThickness
+          : Math.max(configuration.backThickness, requiredBack),
+    });
+  };
   return (
     <div className="studio-page">
       <div className="studio-toolbar">
@@ -1045,7 +1152,19 @@ function StudioView({
               </FieldSelect>
               <RangeField label="Per-side clearance" value={configuration.tolerance} min={0.2} max={0.8} step={0.02} unit="mm" onChange={(value) => onPatch({ tolerance: value })} />
               <RangeField label="Wall" value={configuration.wall} min={1.2} max={3} step={0.05} unit="mm" onChange={(value) => onPatch({ wall: value })} />
-              <RangeField label="Backplate" value={configuration.backThickness} min={0.8} max={3.2} step={0.05} unit="mm" onChange={(value) => onPatch({ backThickness: value })} />
+              <RangeField label="Backplate" value={configuration.backThickness} min={0.8} max={4.5} step={0.05} unit="mm" onChange={(value) => onPatch({ backThickness: value })} />
+              <div className="toggle-row"><Toggle checked={magsafe.enabled} onChange={(enabled) => patchMagSafe({ enabled })} /><span><strong>Embedded MagSafe ring</strong><small>Pause, insert, then seal inside the back</small></span></div>
+              {magsafe.enabled && (
+                <div className="insert-controls">
+                  <div className="callout magic"><Magnet size={18} /><div><strong>MagSafe-compatible insert</strong><span>The pocket stays close to the exterior face. Measure your ring and verify polarity before the print.</span></div></div>
+                  <RangeField label="Ring outside diameter" value={magsafe.outerDiameter} min={48} max={64} step={0.1} unit="mm" onChange={(outerDiameter) => patchMagSafe({ outerDiameter })} />
+                  <RangeField label="Ring inside diameter" value={magsafe.innerDiameter} min={38} max={54} step={0.1} unit="mm" onChange={(innerDiameter) => patchMagSafe({ innerDiameter })} />
+                  <RangeField label="Insert thickness" value={magsafe.thickness} min={0.4} max={2.2} step={0.05} unit="mm" onChange={(thickness) => patchMagSafe({ thickness })} />
+                  <RangeField label="Radial fit clearance" value={magsafe.radialClearance} min={0.1} max={0.5} step={0.05} unit="mm" onChange={(radialClearance) => patchMagSafe({ radialClearance })} />
+                  <RangeField label="Exterior cover" value={magsafe.exteriorCover} min={0.4} max={0.9} step={0.05} unit="mm" onChange={(exteriorCover) => patchMagSafe({ exteriorCover })} />
+                  <RangeField label="Vertical coil offset" value={magsafe.centerY} min={-20} max={20} step={0.5} unit="mm" onChange={(centerY) => patchMagSafe({ centerY })} />
+                </div>
+              )}
               <RangeField label="Screen lip" value={configuration.lipHeight} min={0.5} max={2} step={0.05} unit="mm" onChange={(value) => onPatch({ lipHeight: value })} />
               <RangeField label="Camera margin" value={configuration.cameraMargin} min={0.8} max={3.5} step={0.1} unit="mm" onChange={(value) => onPatch({ cameraMargin: value })} />
               <FieldSelect label="Button treatment" value={configuration.buttonStyle} onChange={(value) => onPatch({ buttonStyle: value as "open" | "covered" })}>
@@ -1103,6 +1222,9 @@ function StudioView({
                 );
               })()}
               <div className="callout"><Info size={17} /><div><strong>Print orientation</strong><span>Back-flat, exterior face on the build plate. The phone-facing surface is generated clean and continuous.</span></div></div>
+              {magsafe.enabled && (
+                <div className="callout warning"><Magnet size={17} /><div><strong>Insertion pause included in 3MF</strong><span>{generated?.printPause ? `Pause at Z ${generated.printPause.printZ.toFixed(2)} mm. ` : "Build geometry to calculate the exact pause height. "}Insert the ring fully flush, confirm polarity, remove loose debris, then resume.</span></div></div>
+              )}
             </div>
           )}
           <div className="control-footer">

@@ -18,6 +18,7 @@ import {
   USB_C_CABLE_CLEARANCE_MM,
   caseDimensions,
   isUsbCPort,
+  patternShape,
 } from "./caseGeometry";
 import { rayCrossings } from "./donorMeasure";
 import { diagnoseMesh } from "./mesh";
@@ -217,6 +218,35 @@ describe("artwork actually reaches the solid", () => {
     );
   });
 
+  for (const pattern of [
+    "kikko",
+    "shippo",
+    "seigaiha",
+    "goma",
+    "shokko",
+    "saya-gata",
+    "izutsu-wari-bishi",
+    "wari-bishi",
+    "sanjyu-bishi",
+    "senbon-koushi",
+  ] as const) {
+    it(`builds a distinct watertight ${pattern} artwork system`, () => {
+      const config = tuneConfiguration(s23fe, {
+        ...defaultConfiguration(s23fe.id),
+        material: "petg",
+        pattern,
+        patternMode: "engraved",
+      });
+      const generated = generateCase(s23fe, config);
+      const diagnostics = diagnoseMesh(generated.geometry as IndexedMesh);
+
+      expect(generated.report.printable).toBe(true);
+      expect(diagnostics.boundaryEdges).toBe(0);
+      expect(diagnostics.nonManifoldEdges).toBe(0);
+      expect((generated.geometry as IndexedMesh).triangleCount).toBeGreaterThan(3000);
+    });
+  }
+
   it("through-cut removes more than engraving", () => {
     const engraved = generateCase(
       s24plus,
@@ -338,8 +368,114 @@ describe("artwork actually reaches the solid", () => {
     expect(modelSettings).toContain('key="filament_maps" value="1 1"');
     expect(modelSettings).toContain('key="filament_volume_maps" value="0 0"');
     expect(modelSettings).toContain('name" value="Case shell"');
-    expect(modelSettings).toContain('name" value="Opaque Kumiko inlay"');
+    expect(modelSettings).toContain('name" value="Opaque Asanoha Kumiko inlay"');
     expect(modelSettings).toContain('key="extruder" value="2"');
+  });
+});
+
+describe("embedded MagSafe insert", () => {
+  it("creates a sealed annular pocket and embeds the exact Bambu pause", () => {
+    const base = defaultConfiguration(s23fe.id);
+    const config = tuneConfiguration(s23fe, {
+      ...base,
+      material: "petg-translucent",
+      pattern: "asanoha",
+      magsafe: { ...base.magsafe, enabled: true },
+    });
+    const generated = generateCase(s23fe, config);
+    const diagnostics = diagnoseMesh(generated.geometry as IndexedMesh);
+    const filament = defaultFilamentFor(config.material)!;
+    const bytes = serializeCase3mf(generated, {
+      filament,
+      recipe: recipeForConfiguration(config),
+      phone: s23fe,
+      date: "2026-08-15",
+    });
+    const files = unzipSync(bytes);
+    const customGcode = strFromU8(files["Metadata/custom_gcode_per_layer.xml"]);
+    const settings = JSON.parse(strFromU8(files["Metadata/project_settings.config"]));
+
+    expect(config.backThickness).toBe(2.4);
+    expect(generated.printPause?.printZ).toBe(1.9);
+    expect(generated.report.printable).toBe(true);
+    expect(generated.report.issues.some((issue) => issue.id === "magsafe-pause-ready")).toBe(true);
+    expect(generated.report.issues.some((issue) => issue.id === "magsafe-coil-unverified")).toBe(true);
+    expect(diagnostics.boundaryEdges).toBe(0);
+    expect(diagnostics.nonManifoldEdges).toBe(0);
+    expect(customGcode).toContain('top_z="1.90000"');
+    expect(customGcode).toContain('type="1"');
+    expect(customGcode).toContain('gcode="M400 U1"');
+    expect(settings.machine_pause_gcode).toBe("M400 U1");
+  });
+
+  it("blocks a backplate that cannot cover the insert", () => {
+    const base = defaultConfiguration(s23fe.id);
+    const config = {
+      ...base,
+      material: "petg-translucent" as const,
+      magsafe: { ...base.magsafe, enabled: true },
+      backThickness: 1.55,
+    };
+    const report = validateCase(s23fe, config);
+
+    expect(report.printable).toBe(false);
+    expect(report.issues.some((issue) => issue.id === "magsafe-back-thin")).toBe(true);
+  });
+
+  it("blocks a ring pocket that intersects a rear-camera opening", () => {
+    const base = defaultConfiguration(s23fe.id);
+    const phone: PhoneRecord = {
+      ...s23fe,
+      features: s23fe.features.map((feature, index) =>
+        index === 0
+          ? { ...feature, center: { ...feature.center, x: 24, y: 0 } }
+          : feature,
+      ),
+    };
+    const config = tuneConfiguration(phone, {
+      ...base,
+      magsafe: { ...base.magsafe, enabled: true },
+    });
+    const report = validateCase(phone, config);
+
+    expect(report.printable).toBe(false);
+    expect(
+      report.issues.some((issue) => issue.id === "magsafe-camera-overlap"),
+    ).toBe(true);
+  });
+
+  it("centres one enlarged artwork motif inside a clean ring gap", () => {
+    const base = defaultConfiguration(s23fe.id);
+    const config = tuneConfiguration(s23fe, {
+      ...base,
+      material: "petg-translucent",
+      pattern: "asanoha",
+      patternMode: "inlay",
+      magsafe: { ...base.magsafe, enabled: true },
+    });
+    const spec = specFromConfiguration(config);
+    const artwork = patternShape(s23fe, caseDimensions(s23fe, spec), spec)!;
+    const distances = artwork
+      .toPolygons()
+      .flat()
+      .map(([x, y]) => Math.hypot(x, y - config.magsafe.centerY));
+    artwork.delete();
+
+    expect(distances.some((distance) => distance < 20)).toBe(true);
+    expect(
+      distances.some((distance) => distance > 22 && distance < 29),
+    ).toBe(false);
+  });
+
+  it("keeps fit coupons free of insert cavities and pauses", () => {
+    const base = defaultConfiguration(s23fe.id);
+    const config = tuneConfiguration(s23fe, {
+      ...base,
+      magsafe: { ...base.magsafe, enabled: true },
+    });
+    const coupon = generateFitCoupon(s23fe, config);
+
+    expect(coupon.printPause).toBeUndefined();
   });
 });
 

@@ -1,10 +1,22 @@
 import type {
   ArchitectureId,
   CaseConfiguration,
+  MagSafeInsertConfiguration,
   MaterialId,
   PatternId,
   PrintProfile,
 } from "../types";
+
+export const DEFAULT_MAGSAFE_INSERT: MagSafeInsertConfiguration = {
+  enabled: false,
+  outerDiameter: 56,
+  innerDiameter: 46,
+  thickness: 1,
+  radialClearance: 0.25,
+  zClearance: 0.2,
+  exteriorCover: 0.6,
+  centerY: 0,
+};
 
 export const materials: Record<
   MaterialId,
@@ -145,6 +157,66 @@ export const patterns: Record<
     description: "Five-petal blossoms with reinforced centers and safe spacing.",
     risk: "Managed",
   },
+  kikko: {
+    name: "Kikkō Tortoiseshell",
+    family: "Japanese geometry",
+    description: "Quiet hexagonal cells with a strong, evenly supported rhythm.",
+    risk: "Lowest",
+  },
+  shippo: {
+    name: "Shippō Circles",
+    family: "Japanese geometry",
+    description: "Overlapping circles form continuous four-petal medallions.",
+    risk: "Managed",
+  },
+  seigaiha: {
+    name: "Seigaiha Waves",
+    family: "Japanese geometry",
+    description: "Layered wave crests stagger cleanly across the backplate.",
+    risk: "Managed",
+  },
+  goma: {
+    name: "Goma Sesame",
+    family: "Kumiko",
+    description: "Layered sesame-star lattice with a strong diagonal rhythm.",
+    risk: "Managed",
+  },
+  shokko: {
+    name: "Shokko Linked Squares",
+    family: "Kumiko",
+    description: "Orthogonal linked frames based on the classic Shokko grid.",
+    risk: "Lowest",
+  },
+  "saya-gata": {
+    name: "Saya-gata Fretwork",
+    family: "Kumiko",
+    description: "Continuous interlocking angular meanders with reinforced turns.",
+    risk: "Managed",
+  },
+  "izutsu-wari-bishi": {
+    name: "Izutsu-wari-bishi",
+    family: "Kumiko",
+    description: "Well-frame diamonds with a smaller split diamond inside.",
+    risk: "Managed",
+  },
+  "wari-bishi": {
+    name: "Wari-bishi",
+    family: "Kumiko",
+    description: "Split diamonds repeated as a clean diagonal lattice.",
+    risk: "Managed",
+  },
+  "sanjyu-bishi": {
+    name: "Sanjyu-bishi",
+    family: "Kumiko",
+    description: "Three nested diamonds create a richer woven field.",
+    risk: "Managed",
+  },
+  "senbon-koushi": {
+    name: "Senbon-koushi",
+    family: "Kumiko",
+    description: "Fine vertical lattice reinforced by repeating horizontal bands.",
+    risk: "Managed",
+  },
 };
 
 export const printProfiles: PrintProfile[] = [
@@ -254,6 +326,7 @@ export function defaultConfiguration(phoneId: string): CaseConfiguration {
     cameraMargin: 1.8,
     patternDepth: 0.35,
     patternScale: 1,
+    magsafe: { ...DEFAULT_MAGSAFE_INSERT },
     buttonStyle: "open",
     topOpening: true,
     bottomOpening: true,

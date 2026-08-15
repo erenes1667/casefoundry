@@ -116,9 +116,40 @@ export type ArchitectureId =
  * the user picked or the name in its own filename. Removed rather than left
  * as a lie; re-add each one WITH its generator.
  */
-export type PatternId = "none" | "asanoha" | "sakura";
+export type PatternId =
+  | "none"
+  | "asanoha"
+  | "sakura"
+  | "kikko"
+  | "shippo"
+  | "seigaiha"
+  | "goma"
+  | "shokko"
+  | "saya-gata"
+  | "izutsu-wari-bishi"
+  | "wari-bishi"
+  | "sanjyu-bishi"
+  | "senbon-koushi";
 
 export type PatternMode = "engraved" | "sealed" | "inlay" | "vented";
+
+export interface MagSafeInsertConfiguration {
+  enabled: boolean;
+  /** Outside diameter of the magnetic insert, in mm. */
+  outerDiameter: number;
+  /** Inside diameter of the magnetic insert, in mm. */
+  innerDiameter: number;
+  /** Measured insert thickness, in mm. */
+  thickness: number;
+  /** Radial fit allowance on both circular edges, in mm. */
+  radialClearance: number;
+  /** Vertical room above the insert before the sealing layer, in mm. */
+  zClearance: number;
+  /** Continuous plastic between the insert and the exterior face, in mm. */
+  exteriorCover: number;
+  /** Offset from the phone centre toward its top edge, in mm. */
+  centerY: number;
+}
 
 export interface CaseConfiguration {
   phoneId: string;
@@ -133,6 +164,7 @@ export interface CaseConfiguration {
   cameraMargin: number;
   patternDepth: number;
   patternScale: number;
+  magsafe: MagSafeInsertConfiguration;
   buttonStyle: "open" | "covered";
   topOpening: boolean;
   bottomOpening: boolean;
@@ -189,6 +221,11 @@ export interface GeneratedCase {
   }>;
   report: ValidationReport;
   name: string;
+  /** Bambu pause inserted before the first layer that seals an embedded part. */
+  printPause?: {
+    printZ: number;
+    message: string;
+  };
 }
 
 export interface PrintProfile {

@@ -1,6 +1,6 @@
 {
   "name": "casefoundry-macos",
-  "version": "2026.8.6",
+  "version": "2026.8.7",
   "private": true,
   "author": "CaseFoundry",
   "description": "Offline macOS phone measurement database and parametric case studio",

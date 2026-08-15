@@ -1,11 +1,11 @@
-# CaseFoundry 2026.8.3 artifact manifest
+# CaseFoundry 2026.8.7 artifact manifest
 
 ## macOS applications
 
 | Artifact | Architecture | Size | SHA-256 |
 |---|---|---:|---|
-| `CaseFoundry-2026.8.3-arm64.zip` | Apple Silicon / Mach-O arm64 | 124,772,816 bytes | `9bf956c5ab3791fb490415444b4fdf198e7a706dbd63ce5381ded26c68b65e2d` |
-| `CaseFoundry-2026.8.3-x64.zip` | Intel / Mach-O x86_64 | 126,892,552 bytes | `ce4cdcfd8ac4e9d5c583ce04bf536a8497f452737d3fed413da10279f1ad5a26` |
+| `CaseFoundry-2026.8.7-arm64.zip` | Apple Silicon / Mach-O arm64 | 124,779,294 bytes | `c34024106b00ded0edaa4ffd6ed8f7308eb1ec5be6ab10523c03defe3eee8f27` |
+| `CaseFoundry-2026.8.7-x64.zip` | Intel / Mach-O x86_64 | 126,899,030 bytes | `eba0714db7ed4d559bea4695dbb86a07d35119fd590447acc7299fe6804efcac` |
 
 Both ZIP archives passed full `unzip -t` checks. Their app bundles contain:
 
@@ -18,16 +18,18 @@ Both ZIP archives passed full `unzip -t` checks. Their app bundles contain:
 - main process
 
 Bundle identifier: `com.casefoundry.desktop`  
-Application version: `2026.8.3`
+Application version: `2026.8.7`
 
 ## Verification
 
-- 19 automated core tests passed.
-- 46 donor-measurement, validation, export, and real Bambu Studio slicing gates passed.
+- 41 automated core tests passed.
+- 52 donor-measurement, validation, export, and real Bambu Studio slicing gates passed.
 - USB-C geometry reserves at least 7.0 mm of vertical cable-housing clearance.
 - USB-C validation blocks phone records without a measured USB-C port.
+- MagSafe insert geometry is layer-aligned and the real sliced plate G-code contains the insertion pause.
+- Rear-camera overlap, undersized covers, invalid rings, and insufficient back thickness block export.
 - Apple Silicon and Intel Mach-O architecture checks passed.
 - The rebuilt Apple Silicon package launched successfully on macOS.
-- Case Studio displayed the USB-C clearance gate as passed.
+- Case Studio displayed the MagSafe controls, insertion-pause summary, all six artwork choices, and the USB-C clearance gate.
 - Source and packaged application scans found no secrets or private-path references.
 - The downloadable applications are unsigned and unnotarized.

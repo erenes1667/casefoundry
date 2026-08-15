@@ -72,6 +72,7 @@ function specFor(
     lipOverhang: 1.2,
     cameraMargin: 0.9,
     layerHeight: recipe.layerHeight,
+    initialLayerHeight: recipe.initialLayerHeight,
     openTop: true,
     openBottom: true,
     cornerLipOnly: !filament.flexible,
@@ -81,6 +82,16 @@ function specFor(
     patternDepth: 0.5,
     patternStroke: 1.0,
     patternScale: 1,
+    magsafe: {
+      enabled: false,
+      outerDiameter: 56,
+      innerDiameter: 46,
+      thickness: 1,
+      radialClearance: 0.25,
+      zClearance: 0.2,
+      exteriorCover: 0.6,
+      centerY: 0,
+    },
     ...overrides,
   };
 }
@@ -130,7 +141,29 @@ const CASES: Array<{
     phone: "Galaxy S24+",
     filament: "Bambu TPU 95A @BBL P2S",
     recipe: "solid-engraved",
-    spec: { pattern: "kumiko-hex", patternMode: "through", backThickness: 2.0 },
+    spec: { pattern: "kikko", patternMode: "through", backThickness: 2.0 },
+  },
+  {
+    phone: "Galaxy S23 FE",
+    filament: "Bambu PETG Translucent @BBL P2S 0.4 nozzle",
+    recipe: "translucent-glass",
+    spec: {
+      pattern: "asanoha",
+      patternMode: "inlay",
+      backThickness: 2.4,
+      magsafe: {
+        enabled: true,
+        outerDiameter: 56,
+        innerDiameter: 46,
+        thickness: 1,
+        radialClearance: 0.25,
+        zClearance: 0.2,
+        exteriorCover: 0.6,
+        centerY: 0,
+      },
+    },
+    twoMaterial: true,
+    variant: "magsafe-opaque-inlay",
   },
   // Every supported printer must produce a project its own machine can slice.
   // A P2S project handed to an A1 owner is simply the wrong job.
@@ -227,6 +260,7 @@ describe("export slices in Bambu Studio", () => {
             : undefined,
           recipe: RECIPES[testCase.recipe],
           printer,
+          pause: built.printPause,
           metadata: {
             title: `${phone.brand} ${phone.model} case`,
             plateName: stem,
@@ -272,8 +306,11 @@ describe("export slices in Bambu Studio", () => {
           .filter((line) => !/Invalid T command/i.test(line))
           .filter((line) => !/ZFiller: encounter idx from clip/i.test(line));
         expect(realErrors, `Bambu Studio reported errors for ${stem}`).toEqual([]);
-        if (testCase.twoMaterial) {
-          const sliced = unzipSync(new Uint8Array(fs.readFileSync(gcode)));
+        const sliced =
+          testCase.twoMaterial || built.printPause
+            ? unzipSync(new Uint8Array(fs.readFileSync(gcode)))
+            : undefined;
+        if (testCase.twoMaterial && sliced) {
           const sliceInfoBytes = sliced["Metadata/slice_info.config"];
           expect(sliceInfoBytes, "Bambu output is missing slice metadata").toBeDefined();
           const sliceInfo = strFromU8(sliceInfoBytes);
@@ -283,6 +320,20 @@ describe("export slices in Bambu Studio", () => {
           expect(sliceInfo, "opaque slot was not used by the slicer").toContain(
             '<filament id="2"',
           );
+        }
+        if (built.printPause && sliced) {
+          const projectFiles = unzipSync(project.bytes);
+          const customGcode = strFromU8(
+            projectFiles["Metadata/custom_gcode_per_layer.xml"],
+          );
+          expect(customGcode).toContain('type="1"');
+          expect(customGcode).toContain('gcode="M400 U1"');
+          expect(customGcode).toContain(
+            `top_z="${built.printPause.printZ.toFixed(5)}"`,
+          );
+          const gcodePath = Object.keys(sliced).find((name) => name.endsWith(".gcode"));
+          expect(gcodePath, "sliced project is missing plate G-code").toBeDefined();
+          expect(strFromU8(sliced[gcodePath!])).toContain("M400 U1");
         }
       },
       900_000,

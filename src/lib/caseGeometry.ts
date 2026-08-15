@@ -21,6 +21,9 @@ export const MIN_PATTERN_SKIN_MM = 0.55;
 /** Smallest buried channel that remains intentional after slicing, in mm. */
 export const MIN_SEALED_PATTERN_DEPTH_MM = 0.2;
 
+/** Minimum plastic between an embedded ring and the phone cavity, in mm. */
+export const MIN_MAGSAFE_INNER_COVER_MM = 0.55;
+
 /**
  * Resolves the actual buried-artwork layers used by both geometry and QA.
  * Sharing this calculation prevents the preview, export, and warning panel
@@ -81,6 +84,8 @@ export interface CaseSpec {
   cameraMargin: number;
   /** Layer height, used to step the chamfer so it prints support-free. */
   layerHeight: number;
+  /** First layer height, used to align insert cavities to real print layers. */
+  initialLayerHeight: number;
   openTop: boolean;
   openBottom: boolean;
   /**
@@ -92,11 +97,117 @@ export interface CaseSpec {
   buttonStyle: "open" | "covered";
   /** Leave the lip only at the four corners, as rigid cases need. */
   cornerLipOnly: boolean;
-  pattern: "none" | "asanoha" | "sakura" | "kumiko-hex";
+  pattern:
+    | "none"
+    | "asanoha"
+    | "sakura"
+    | "kikko"
+    | "shippo"
+    | "seigaiha"
+    | "goma"
+    | "shokko"
+    | "saya-gata"
+    | "izutsu-wari-bishi"
+    | "wari-bishi"
+    | "sanjyu-bishi"
+    | "senbon-koushi";
   patternMode: "engraved" | "through" | "sealed" | "inlay";
   patternDepth: number;
   patternStroke: number;
   patternScale: number;
+  magsafe: {
+    enabled: boolean;
+    outerDiameter: number;
+    innerDiameter: number;
+    thickness: number;
+    radialClearance: number;
+    zClearance: number;
+    exteriorCover: number;
+    centerY: number;
+  };
+}
+
+export interface ResolvedMagSafeInsert {
+  outerDiameter: number;
+  innerDiameter: number;
+  centerY: number;
+  cavityBottom: number;
+  cavityTop: number;
+  cavityHeight: number;
+  pausePrintZ: number;
+  requiredBackThickness: number;
+}
+
+/** Rounds a Z height upward to a boundary the configured slicer can produce. */
+function nextLayerBoundary(
+  requestedZ: number,
+  initialLayerHeight: number,
+  layerHeight: number,
+): number {
+  const first = Math.max(0.01, initialLayerHeight);
+  const layer = Math.max(0.01, layerHeight);
+  if (requestedZ <= first) return first;
+  const steps = Math.ceil((requestedZ - first - 1e-8) / layer);
+  return Number((first + steps * layer).toFixed(5));
+}
+
+/**
+ * Resolves the actual insert pocket and pause height used by geometry and QA.
+ * The cavity starts and ends on print-layer boundaries, so the pause cannot
+ * land halfway through the layer that is supposed to seal the insert.
+ */
+export function resolveMagSafeInsert(
+  spec: CaseSpec,
+): ResolvedMagSafeInsert | null {
+  if (!spec.magsafe.enabled) return null;
+  const radialClearance = Math.max(0, spec.magsafe.radialClearance);
+  const outerDiameter = Math.max(10, spec.magsafe.outerDiameter + radialClearance * 2);
+  const innerDiameter = Math.max(
+    1,
+    Math.min(
+      spec.magsafe.innerDiameter - radialClearance * 2,
+      outerDiameter - Math.max(1, spec.patternStroke),
+    ),
+  );
+  const cavityBottom = nextLayerBoundary(
+    Math.max(0.01, spec.magsafe.exteriorCover),
+    spec.initialLayerHeight,
+    spec.layerHeight,
+  );
+  const cavityTop = nextLayerBoundary(
+    cavityBottom + Math.max(0.1, spec.magsafe.thickness) + Math.max(0, spec.magsafe.zClearance),
+    spec.initialLayerHeight,
+    spec.layerHeight,
+  );
+  return {
+    outerDiameter,
+    innerDiameter,
+    centerY: spec.magsafe.centerY,
+    cavityBottom,
+    cavityTop,
+    cavityHeight: cavityTop - cavityBottom,
+    // Bambu stores the top Z of the first layer printed after the pause.
+    pausePrintZ: Number((cavityTop + spec.layerHeight).toFixed(5)),
+    requiredBackThickness: nextLayerBoundary(
+      cavityTop + MIN_MAGSAFE_INNER_COVER_MM,
+      spec.initialLayerHeight,
+      spec.layerHeight,
+    ),
+  };
+}
+
+/** Annular 2D pocket for the magnetic ring, optionally expanded as a keepout. */
+function magSafeRingShape(spec: CaseSpec, extra = 0): Shape | null {
+  const insert = resolveMagSafeInsert(spec);
+  if (!insert) return null;
+  const outerDiameter = insert.outerDiameter + extra * 2;
+  const innerDiameter = Math.max(1, insert.innerDiameter - extra * 2);
+  const outer = roundedRect(outerDiameter, outerDiameter, outerDiameter / 2);
+  const inner = roundedRect(innerDiameter, innerDiameter, innerDiameter / 2);
+  const ring = outer.subtract(inner).translate([0, insert.centerY]);
+  outer.delete();
+  inner.delete();
+  return ring;
 }
 
 export interface CaseDimensions {
@@ -452,7 +563,7 @@ export function asanohaPolygons(
   return polygons;
 }
 
-/** Five-petal blossoms on a staggered grid. */
+/** Five-petal blossoms on a staggered grid, drawn as notched petal outlines. */
 function sakuraPolygons(
   width: number,
   length: number,
@@ -471,23 +582,22 @@ function sakuraPolygons(
       const cy = row * pitchY;
       for (let petal = 0; petal < 5; petal += 1) {
         const angle = (Math.PI * 2 * petal) / 5 - Math.PI / 2;
-        const tip: [number, number] = [
-          cx + Math.cos(angle) * 5.2 * scale,
-          cy + Math.sin(angle) * 5.2 * scale,
+        const point = (offset: number, radius: number): [number, number] => [
+          cx + Math.cos(angle + offset) * radius * scale,
+          cy + Math.sin(angle + offset) * radius * scale,
         ];
-        const leftAngle = angle - Math.PI / 5;
-        const rightAngle = angle + Math.PI / 5;
-        const left: [number, number] = [
-          cx + Math.cos(leftAngle) * 2.6 * scale,
-          cy + Math.sin(leftAngle) * 2.6 * scale,
+        const points = [
+          point(-0.63, 1.45),
+          point(-0.5, 3.55),
+          point(-0.2, 5.35),
+          point(0, 4.72),
+          point(0.2, 5.35),
+          point(0.5, 3.55),
+          point(0.63, 1.45),
         ];
-        const right: [number, number] = [
-          cx + Math.cos(rightAngle) * 2.6 * scale,
-          cy + Math.sin(rightAngle) * 2.6 * scale,
-        ];
-        polygons.push(strokeQuad(left, tip, stroke));
-        polygons.push(strokeQuad(tip, right, stroke));
-        polygons.push(strokeQuad(right, left, stroke));
+        for (let index = 0; index < points.length - 1; index += 1) {
+          polygons.push(strokeQuad(points[index], points[index + 1], stroke));
+        }
       }
     }
   }
@@ -527,6 +637,312 @@ function hexPolygons(
   return polygons;
 }
 
+/** Shippō, equal circles overlapping into continuous four-petal medallions. */
+function shippoPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const radius = 8.5 * scale;
+  const pitch = radius * Math.SQRT2;
+  const columns = Math.ceil(width / pitch) + 2;
+  const rows = Math.ceil(length / pitch) + 2;
+  const segments = 24;
+  for (let row = -rows; row <= rows; row += 1) {
+    for (let column = -columns; column <= columns; column += 1) {
+      const cx = column * pitch;
+      const cy = row * pitch;
+      for (let index = 0; index < segments; index += 1) {
+        const a = (Math.PI * 2 * index) / segments;
+        const b = (Math.PI * 2 * (index + 1)) / segments;
+        polygons.push(
+          strokeQuad(
+            [cx + Math.cos(a) * radius, cy + Math.sin(a) * radius],
+            [cx + Math.cos(b) * radius, cy + Math.sin(b) * radius],
+            stroke,
+          ),
+        );
+      }
+    }
+  }
+  return polygons;
+}
+
+/** Seigaiha, three nested wave crests repeated on staggered rows. */
+function seigaihaPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const radius = 10 * scale;
+  const pitchX = radius * 2;
+  const pitchY = radius * 0.86;
+  const columns = Math.ceil(width / pitchX) + 2;
+  const rows = Math.ceil(length / pitchY) + 2;
+  const segments = 16;
+  for (let row = -rows; row <= rows; row += 1) {
+    for (let column = -columns; column <= columns; column += 1) {
+      const cx = column * pitchX + (row % 2 === 0 ? 0 : radius);
+      const cy = row * pitchY;
+      for (const arcRadius of [radius, radius * 0.68, radius * 0.36]) {
+        for (let index = 0; index < segments; index += 1) {
+          const a = Math.PI + (Math.PI * index) / segments;
+          const b = Math.PI + (Math.PI * (index + 1)) / segments;
+          polygons.push(
+            strokeQuad(
+              [cx + Math.cos(a) * arcRadius, cy + Math.sin(a) * arcRadius],
+              [cx + Math.cos(b) * arcRadius, cy + Math.sin(b) * arcRadius],
+              stroke,
+            ),
+          );
+        }
+      }
+    }
+  }
+  return polygons;
+}
+
+function addPolyline(
+  polygons: Array<Array<[number, number]>>,
+  points: Array<[number, number]>,
+  stroke: number,
+): void {
+  for (let index = 0; index < points.length - 1; index += 1) {
+    polygons.push(strokeQuad(points[index], points[index + 1], stroke));
+  }
+}
+
+/** Goma, layered sesame-star strokes repeated on a triangular lattice. */
+function gomaPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const pitchX = 18 * scale;
+  const pitchY = 15.6 * scale;
+  const columns = Math.ceil(width / pitchX) + 2;
+  const rows = Math.ceil(length / pitchY) + 2;
+  for (let row = -rows; row <= rows; row += 1) {
+    for (let column = -columns; column <= columns; column += 1) {
+      const cx = column * pitchX + (row % 2 === 0 ? 0 : pitchX / 2);
+      const cy = row * pitchY;
+      for (const angle of [0, Math.PI / 3, (Math.PI * 2) / 3]) {
+        const dx = Math.cos(angle) * 8.8 * scale;
+        const dy = Math.sin(angle) * 8.8 * scale;
+        const px = -Math.sin(angle) * 1.9 * scale;
+        const py = Math.cos(angle) * 1.9 * scale;
+        for (const offset of [-1, 0, 1]) {
+          polygons.push(
+            strokeQuad(
+              [cx - dx + px * offset, cy - dy + py * offset],
+              [cx + dx + px * offset, cy + dy + py * offset],
+              stroke,
+            ),
+          );
+        }
+      }
+    }
+  }
+  return polygons;
+}
+
+/** Shokko, linked square frames with straight supported connectors. */
+function shokkoPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const pitch = 18 * scale;
+  const half = 4.8 * scale;
+  const columns = Math.ceil(width / pitch) + 2;
+  const rows = Math.ceil(length / pitch) + 2;
+  for (let row = -rows; row <= rows; row += 1) {
+    for (let column = -columns; column <= columns; column += 1) {
+      const cx = column * pitch;
+      const cy = row * pitch;
+      addPolyline(
+        polygons,
+        [
+          [cx - half, cy - half],
+          [cx + half, cy - half],
+          [cx + half, cy + half],
+          [cx - half, cy + half],
+          [cx - half, cy - half],
+        ],
+        stroke,
+      );
+      polygons.push(strokeQuad([cx + half, cy], [cx + pitch - half, cy], stroke));
+      polygons.push(strokeQuad([cx, cy + half], [cx, cy + pitch - half], stroke));
+    }
+  }
+  return polygons;
+}
+
+/** Saya-gata, a continuous angular fret built from interlocking right turns. */
+function sayaGataPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const pitch = 16 * scale;
+  const half = pitch / 2;
+  const quarter = pitch / 4;
+  const columns = Math.ceil(width / pitch) + 2;
+  const rows = Math.ceil(length / pitch) + 2;
+  for (let row = -rows; row <= rows; row += 1) {
+    for (let column = -columns; column <= columns; column += 1) {
+      const cx = column * pitch;
+      const cy = row * pitch;
+      addPolyline(
+        polygons,
+        [
+          [cx - half, cy - quarter],
+          [cx, cy - quarter],
+          [cx, cy + quarter],
+          [cx + half, cy + quarter],
+        ],
+        stroke,
+      );
+      addPolyline(
+        polygons,
+        [
+          [cx - quarter, cy - half],
+          [cx - quarter, cy],
+          [cx + quarter, cy],
+          [cx + quarter, cy + half],
+        ],
+        stroke,
+      );
+    }
+  }
+  return polygons;
+}
+
+function diamondPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+  rings: number[],
+  split: boolean,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const pitchX = 23 * scale;
+  const pitchY = 15 * scale;
+  const columns = Math.ceil(width / pitchX) + 2;
+  const rows = Math.ceil(length / pitchY) + 2;
+  for (let row = -rows; row <= rows; row += 1) {
+    for (let column = -columns; column <= columns; column += 1) {
+      const cx = column * pitchX + (row % 2 === 0 ? 0 : pitchX / 2);
+      const cy = row * pitchY;
+      for (const ring of rings) {
+        const rx = 11.5 * scale * ring;
+        const ry = 7.5 * scale * ring;
+        addPolyline(
+          polygons,
+          [
+            [cx, cy - ry],
+            [cx + rx, cy],
+            [cx, cy + ry],
+            [cx - rx, cy],
+            [cx, cy - ry],
+          ],
+          stroke,
+        );
+      }
+      if (split) {
+        polygons.push(
+          strokeQuad(
+            [cx - 11.5 * scale, cy],
+            [cx + 11.5 * scale, cy],
+            stroke,
+          ),
+        );
+        polygons.push(
+          strokeQuad(
+            [cx, cy - 7.5 * scale],
+            [cx, cy + 7.5 * scale],
+            stroke,
+          ),
+        );
+      }
+    }
+  }
+  return polygons;
+}
+
+/** Senbon-koushi, fine vertical bars tied together with triple horizontal bands. */
+function senbonKoushiPolygons(
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const polygons: Array<Array<[number, number]>> = [];
+  const verticalPitch = 4.8 * scale;
+  const bandPitch = 22 * scale;
+  const columns = Math.ceil(width / verticalPitch) + 2;
+  const rows = Math.ceil(length / bandPitch) + 2;
+  for (let column = -columns; column <= columns; column += 1) {
+    const x = column * verticalPitch;
+    polygons.push(strokeQuad([x, -length], [x, length], stroke));
+  }
+  for (let row = -rows; row <= rows; row += 1) {
+    const y = row * bandPitch;
+    for (const offset of [-2.6, 0, 2.6]) {
+      polygons.push(
+        strokeQuad(
+          [-width, y + offset * scale],
+          [width, y + offset * scale],
+          stroke,
+        ),
+      );
+    }
+  }
+  return polygons;
+}
+
+function polygonsForPattern(
+  pattern: CaseSpec["pattern"],
+  width: number,
+  length: number,
+  scale: number,
+  stroke: number,
+): Array<Array<[number, number]>> {
+  const radius = 11 * scale;
+  if (pattern === "asanoha") return asanohaPolygons(width, length, radius, stroke);
+  if (pattern === "sakura") return sakuraPolygons(width, length, scale, stroke);
+  if (pattern === "kikko") return hexPolygons(width, length, radius, stroke);
+  if (pattern === "shippo") return shippoPolygons(width, length, scale, stroke);
+  if (pattern === "seigaiha") return seigaihaPolygons(width, length, scale, stroke);
+  if (pattern === "goma") return gomaPolygons(width, length, scale, stroke);
+  if (pattern === "shokko") return shokkoPolygons(width, length, scale, stroke);
+  if (pattern === "saya-gata") return sayaGataPolygons(width, length, scale, stroke);
+  if (pattern === "izutsu-wari-bishi") {
+    return diamondPolygons(width, length, scale, stroke, [1, 0.58], true);
+  }
+  if (pattern === "wari-bishi") {
+    return diamondPolygons(width, length, scale, stroke, [1], true);
+  }
+  if (pattern === "sanjyu-bishi") {
+    return diamondPolygons(width, length, scale, stroke, [1, 0.7, 0.4], false);
+  }
+  if (pattern === "senbon-koushi") {
+    return senbonKoushiPolygons(width, length, scale, stroke);
+  }
+  return [];
+}
+
 /**
  * Builds the artwork outline, clipped to the safe area of the back and kept
  * clear of the camera opening.
@@ -540,16 +956,13 @@ export function patternShape(
 
   const width = dimensions.outerWidth;
   const length = dimensions.outerLength;
-  const radius = 11 * spec.patternScale;
-
-  let polygons: Array<Array<[number, number]>>;
-  if (spec.pattern === "asanoha") {
-    polygons = asanohaPolygons(width, length, radius, spec.patternStroke);
-  } else if (spec.pattern === "sakura") {
-    polygons = sakuraPolygons(width, length, spec.patternScale, spec.patternStroke);
-  } else {
-    polygons = hexPolygons(width, length, radius, spec.patternStroke);
-  }
+  const polygons = polygonsForPattern(
+    spec.pattern,
+    width,
+    length,
+    spec.patternScale,
+    spec.patternStroke,
+  );
   if (!polygons.length) return null;
 
   const raw = mergePolygons(polygons);
@@ -563,6 +976,55 @@ export function patternShape(
   );
   let clipped = raw.intersect(safeArea);
   raw.delete();
+
+  // A simple annular subtraction makes MagSafe artwork look accidentally cut
+  // away. Compose it deliberately instead: remove the complete ring zone from
+  // the repeating field, then place one enlarged matching motif inside it.
+  const insert = resolveMagSafeInsert(spec);
+  if (insert) {
+    const gap = Math.max(1.2, spec.patternStroke * 1.5);
+    const outerGapBase = roundedRect(
+      insert.outerDiameter + gap * 2,
+      insert.outerDiameter + gap * 2,
+      insert.outerDiameter / 2 + gap,
+    );
+    const outerGap = outerGapBase.translate([0, insert.centerY]);
+    outerGapBase.delete();
+    const background = clipped.subtract(outerGap);
+    clipped.delete();
+    outerGap.delete();
+    clipped = background;
+
+    const centreDiameter = Math.max(2, insert.innerDiameter - gap * 2);
+    const emblemPolygons = polygonsForPattern(
+      spec.pattern,
+      centreDiameter,
+      centreDiameter,
+      spec.patternScale * 2.15,
+      spec.patternStroke,
+    );
+    if (emblemPolygons.length) {
+      const emblemAtOrigin = mergePolygons(emblemPolygons);
+      const emblemRaw = emblemAtOrigin.translate([0, insert.centerY]);
+      emblemAtOrigin.delete();
+      const centreMaskBase = roundedRect(
+        centreDiameter,
+        centreDiameter,
+        centreDiameter / 2,
+      );
+      const centreMask = centreMaskBase.translate([0, insert.centerY]);
+      centreMaskBase.delete();
+      const maskedEmblem = emblemRaw.intersect(centreMask);
+      const safeEmblem = maskedEmblem.intersect(safeArea);
+      const combined = clipped.add(safeEmblem);
+      clipped.delete();
+      emblemRaw.delete();
+      centreMask.delete();
+      maskedEmblem.delete();
+      safeEmblem.delete();
+      clipped = combined;
+    }
+  }
   safeArea.delete();
 
   const keepouts = cameraShapes(phone, spec.cameraMargin + 3.4);
@@ -581,6 +1043,10 @@ export interface BuiltCase {
   inlay?: Solid;
   dimensions: CaseDimensions;
   cutoutCount: number;
+  printPause?: {
+    printZ: number;
+    message: string;
+  };
 }
 
 export function buildCase(phone: PhoneRecord, spec: CaseSpec): BuiltCase {
@@ -637,6 +1103,19 @@ export function buildCase(phone: PhoneRecord, spec: CaseSpec): BuiltCase {
   for (const shape of cameraShapes(phone, spec.cameraMargin)) {
     cutouts.push(extrude(shape, -1, spec.backThickness + 2));
     shape.delete();
+  }
+
+  const magsafeInsert = resolveMagSafeInsert(spec);
+  const magsafeRing = magSafeRingShape(spec);
+  if (magsafeInsert && magsafeRing) {
+    cutouts.push(
+      extrude(
+        magsafeRing,
+        magsafeInsert.cavityBottom,
+        magsafeInsert.cavityHeight,
+      ),
+    );
+    magsafeRing.delete();
   }
 
   const padded =
@@ -719,5 +1198,16 @@ export function buildCase(phone: PhoneRecord, spec: CaseSpec): BuiltCase {
     artwork.delete();
   }
 
-  return { solid: shell, inlay, dimensions, cutoutCount: cutouts.length };
+  return {
+    solid: shell,
+    inlay,
+    dimensions,
+    cutoutCount: cutouts.length,
+    printPause: magsafeInsert
+      ? {
+          printZ: magsafeInsert.pausePrintZ,
+          message: "Insert MagSafe ring with correct polarity, press it fully flush, then resume.",
+        }
+      : undefined,
+  };
 }

@@ -157,6 +157,13 @@ export interface PrintRecipe {
   brimType: string;
 }
 
+export interface EmbeddedPrintPause {
+  /** Top Z of the first layer printed after the pause, in mm. */
+  printZ: number;
+  /** Short instruction shown with the pause in supporting Bambu interfaces. */
+  message: string;
+}
+
 /**
  * Recipes recovered verbatim from two print-verified project files.
  * These are measured settings from files that printed well, not defaults.
@@ -550,6 +557,8 @@ export function buildBambuProject(options: {
   printer?: PrinterId;
   /** Skip the watertight gate. Only for inspecting a known-bad mesh. */
   allowNonManifold?: boolean;
+  /** Optional user pause stored in Bambu's per-layer project metadata. */
+  pause?: EmbeddedPrintPause;
 }): BambuProjectResult {
   const sourceParts = options.parts?.length
     ? options.parts
@@ -593,6 +602,15 @@ export function buildBambuProject(options: {
 
   const printer = options.printer ?? DEFAULT_PRINTER;
   const config = buildProjectConfig(filaments, options.recipe, printer);
+  if (options.pause) {
+    if (!Number.isFinite(options.pause.printZ) || options.pause.printZ <= 0) {
+      throw new Error("Embedded print pause requires a positive finite Z height.");
+    }
+    // Bambu's own machine profiles use this command for a user-interaction
+    // pause. The bundled P2S project inherited a blank override, so the value
+    // must be explicit whenever a project actually carries a pause.
+    config.machine_pause_gcode = "M400 U1";
+  }
   const centre = plateCentre(config);
   const bounds = assemblyBounds(seatedParts);
   const seed = `${options.metadata.title}|${filaments.map((entry) => entry.name).join("|")}|${options.recipe.id}|${printer}`;
@@ -718,8 +736,11 @@ ${partsXml}
 </Relationships>
 `;
 
+  const pauseLayer = options.pause
+    ? `<layer top_z="${options.pause.printZ.toFixed(5)}" type="1" extruder="1" color="" extra="${escapeXml(options.pause.message)}" gcode="M400 U1"/>`
+    : "";
   const customGcode = `<?xml version='1.0' encoding='utf-8'?>
-<custom_gcodes_per_layer><plate><plate_info id="1"/><mode value="SingleExtruder"/></plate></custom_gcodes_per_layer>
+<custom_gcodes_per_layer><plate><plate_info id="1"/>${pauseLayer}<mode value="SingleExtruder"/></plate></custom_gcodes_per_layer>
 `;
 
   const files: Record<string, Uint8Array> = {

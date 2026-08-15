@@ -1,4 +1,23 @@
-# CaseFoundry 2026.8 release notes
+# CaseFoundry 2026.8.7 release notes
+
+## Embedded insert workflow
+
+- Configurable MagSafe-compatible annular pocket.
+- Automatic backplate reinforcement with continuous exterior and phone-side covers.
+- Layer-aligned cavity boundaries for the selected print recipe.
+- Bambu-native pause stored in `Metadata/custom_gcode_per_layer.xml`.
+- Pause command verified in real sliced plate G-code.
+- STL export blocked when the print depends on an insertion pause.
+- Explicit warning when the phone catalog has no measured charging-coil location.
+- Export is blocked if the insert pocket intersects a rear-camera opening.
+
+## Artwork expansion
+
+- The proven Asanoha generator remains unchanged.
+- New Kikkō tortoiseshell, Shippō circle, and Seigaiha wave systems.
+- Added Goma, Shokko, Saya-gata, Izutsu-wari-bishi, Wari-bishi, Sanjyu-bishi, and Senbon-koushi from the supplied kumiko reference.
+- Sakura petals now use notched, curved outlines instead of triangular approximations.
+- MagSafe artwork now uses a clean ring frame with one enlarged matching motif centered inside it.
 
 ## Product surface
 
@@ -39,8 +58,8 @@ Body dimensions include manufacturer evidence. Hardware placement is reference-d
 
 ## Verification
 
-- 19 automated core tests passed.
-- 46 donor-measurement, validation, export, and real-slicer gate tests passed.
+- 41 automated core tests passed.
+- 52 donor-measurement, validation, export, and real-slicer gate tests passed.
 - 4/4 bundled phone solids passed construction and positive-bounds checks.
 - Physical screen-right button notch probe passed.
 - Wrong-side material-presence control probe passed.
@@ -49,6 +68,7 @@ Body dimensions include manufacturer evidence. Hardware placement is reference-d
 - Fit-coupon size and export checks passed.
 - Apple Silicon and Intel archive integrity passed.
 - Mach-O architecture checks passed.
+- Packaged desktop UI showed all six artwork systems, MagSafe controls, and the insertion-pause summary.
 
 ## Known operational limitation
 

@@ -8,8 +8,8 @@ This release is intentionally honest about certainty. The bundled S24+, S23 FE, 
 
 Download the latest build from [GitHub Releases](https://github.com/erenes1667/casefoundry/releases/latest), then choose the archive that matches your Mac:
 
-- `CaseFoundry-2026.8.6-arm64.zip`: Apple Silicon, including M1, M2, M3, M4, and later Apple chips.
-- `CaseFoundry-2026.8.6-x64.zip`: Intel Macs.
+- `CaseFoundry-2026.8.7-arm64.zip`: Apple Silicon, including M1, M2, M3, M4, and later Apple chips.
+- `CaseFoundry-2026.8.7-x64.zip`: Intel Macs.
 
 Unzip the archive, move `CaseFoundry.app` to Applications, then right-click it and choose **Open** the first time.
 
@@ -30,16 +30,17 @@ Do not use that command on a broader folder.
 - Canonical coordinates: `+X = screen-right`, `+Y = top`, `+Z = screen`.
 - Measurement editor for body, camera, flash, buttons, ports, speakers, microphones, sources, and validation status.
 - Rigid open-lip, TPU bumper, hybrid backplate, and translucent-art architectures.
-- Plain, Asanoha Kumiko, reinforced Sakura, signal-garden, and contour-field artwork systems.
+- Plain, Asanoha, Goma, Sakura, Shokko, Saya-gata, Izutsu-wari-bishi, Wari-bishi, Sanjyu-bishi, Senbon-koushi, Kikkō, Shippō, and Seigaiha artwork systems.
 - Exterior engraving, sealed buried inlay, and vented construction modes.
 - Real constructive-solid geometry with camera and hardware subtraction.
 - Binary STL and multipart 3MF export.
-- Separate shell and buried-art objects in sealed 3MF files.
+- Separate shell and buried-art objects in opaque-inlay 3MF files.
 - Material rules for solid PLA, PLA Silk, TPU 95A, PETG Basic, and translucent PETG.
 - Bambu Lab P2S starting profiles for a 0.4 mm nozzle.
 - Live DFM score, blocking export gates, and explicit physical-fit warnings.
 - Small camera, controls, and bottom-port fit-coupon generator.
 - Mandatory measured USB-C geometry with 7 mm clearance for the molded cable end.
+- Configurable embedded MagSafe-compatible ring pocket with a layer-aligned Bambu pause.
 - Regression runner that constructs, bounds-checks, triangulates, and serializes each bundled device.
 
 ## Recommended first workflow
@@ -54,6 +55,14 @@ Do not use that command on a broader folder.
 8. Record the result in **Measurement Lab**. Only then mark Physical fit as Passed.
 9. Export 3MF for Bambu Studio. Use STL when a single-material mesh is enough.
 
+## Embedded MagSafe-compatible inserts
+
+Enable **Embedded MagSafe ring** in Case Studio, then enter the measured outside diameter, inside diameter, and thickness of the exact insert. CaseFoundry aligns the pocket to real print layers, thickens the backplate enough to enclose it, and stores a pause in the Bambu 3MF immediately before the first sealing layer.
+
+When artwork is enabled, the repeating field stops cleanly outside the ring and one enlarged matching motif is centered inside it. The ring reads as an intentional frame instead of a pattern that was cut away.
+
+Print back-flat. At the pause, confirm the magnetic polarity, seat the ring fully flush, remove loose debris, and resume. The default ring position is centered because the bundled phone records do not yet include measured wireless-charging coil locations. Use the vertical offset only from a physical coil measurement. STL export is blocked for embedded inserts because STL cannot carry the required pause.
+
 ## The button-side rule
 
 CaseFoundry stores hardware in a handset-fixed coordinate system. `screenRight` means the physical right edge while looking at the screen. A rear view naturally mirrors that edge visually, but the stored X value and generated cutout do not swap.
@@ -65,10 +74,10 @@ Rigid materials automatically use one open control-side notch. They do not gener
 The translucent-art preset uses:
 
 - 1.70 mm walls
-- 1.35 mm backplate
+- 1.55 mm backplate
 - 0.40 mm buried artwork
-- approximately 0.32 mm continuous exterior skin
-- at least approximately 0.60 mm phone-facing skin
+- 0.55 mm continuous exterior skin
+- 0.60 mm phone-facing skin
 - separate named shell and artwork objects in 3MF
 
 Assign translucent PETG to the shell and a compatible opaque PETG to the artwork object. Do not assume PLA will bond reliably when buried inside PETG. FDM PETG can look clear and deep when dry, slow, hot, and printed with aligned solid paths, but it will not become optical glass.
@@ -112,18 +121,12 @@ Cross-package unsigned macOS ZIPs:
 CSC_IDENTITY_AUTO_DISCOVERY=false npm run package:mac
 ```
 
-Generate reference exports:
-
-```bash
-npm run export:references
-```
-
 ## Verification performed for this release
 
 - TypeScript typecheck passed.
 - Vite production build passed.
-- Nineteen automated core database and geometry tests passed.
-- Forty-six donor-measurement, validation, export, and real-slicer gate tests passed.
+- Forty-one automated core database and geometry tests passed.
+- Fifty-two donor-measurement, validation, export, and real-slicer gate tests passed.
 - The screen-right control-notch test probes both physical sides and confirms material is removed only on the intended edge.
 - All four bundled phone fixtures construct as positive solids.
 - Binary STL export passed.

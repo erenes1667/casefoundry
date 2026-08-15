@@ -188,6 +188,7 @@ input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; heigh
 .toggle-row > span strong, .toggle-row > span small { display: block; }
 .toggle-row > span strong { font-size: 9.5px; }
 .toggle-row > span small { margin-top: 2px; color: var(--muted-2); font-size: 8.5px; }
+.insert-controls { display: grid; gap: 11px; padding: 11px; border: 1px solid rgba(211,173,255,.15); border-radius: 9px; background: rgba(175,117,226,.035); }
 .control-footer { display: grid; gap: 7px; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line-soft); }
 .pattern-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .pattern-picker button { padding: 0; overflow: hidden; border: 1px solid #2e3830; border-radius: 8px; color: #9caaa0; background: #131714; cursor: pointer; }
@@ -198,7 +199,7 @@ input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; heigh
 .pattern-swatch.plain { display: grid; place-items: center; background: linear-gradient(145deg,#273129,#151a16); }
 .pattern-swatch.plain span { width: 60%; height: 48%; padding: 0; border: 1px solid rgba(199,255,115,.18); border-radius: 10px; background: linear-gradient(145deg,rgba(199,255,115,.08),transparent); }
 .pattern-swatch svg { display: block; width: 100%; height: 100%; }
-.pattern-swatch path, .pattern-swatch ellipse, .pattern-swatch circle { fill: none; stroke: currentColor; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pattern-swatch path, .pattern-swatch line, .pattern-swatch ellipse, .pattern-swatch circle { fill: none; stroke: currentColor; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .pattern-swatch ellipse, .pattern-swatch circle { fill: rgba(199,255,115,.11); }
 .color-field { display: grid; grid-template-columns: 1fr 36px auto; align-items: center; gap: 7px; }
 .color-field input { min-height: 30px; height: 30px; padding: 2px; }
